@@ -14,6 +14,10 @@ test('left and right turn in the requested direction and bank into the turn', ()
   assert(transformPoint(aircraftMatrix(left),[10,0,0])[1]>left.y);
   assert(transformPoint(aircraftMatrix(right),[10,0,0])[1]<right.y);
 });
+test('holding full stick permits a steep bank in both directions', () => {
+  assert(fly({x:-1,y:0},2).roll>1.4);
+  assert(fly({x:1,y:0},2).roll< -1.4);
+});
 test('model nose follows simulated heading and pitch', () => {
   const s={...createFlight(),yaw:0.5,pitch:0.3,roll:0}; const nose=transformPoint(aircraftMatrix(s),[0,0,-10]);
   assert(nose[0]>s.x && nose[1]>s.y && nose[2]<s.z);

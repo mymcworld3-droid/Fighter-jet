@@ -20,7 +20,7 @@
         <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div>
         <div><div class="brand-title">SKYWARD <span> / 01</span></div><div class="brand-subtitle">FIGHTER FLIGHT SIMULATOR</div></div>
       </div>
-      <div class="flight-status"><span class="status-dot"></span><span id="flight-status">飛行中</span><span class="status-divider"></span><span>自由飛行</span></div>
+      <div class="top-actions"><button id="multiplayer-button" class="multiplayer-button" type="button"><span class="room-dot"></span><span id="multiplayer-label">多人連線</span></button><div class="flight-status"><span class="status-dot"></span><span id="flight-status">飛行中</span><span class="status-divider"></span><span>自由飛行</span></div></div>
     </header>
 
     <div class="compass" aria-label="航向">
@@ -36,6 +36,8 @@
     <div class="reticle" aria-hidden="true"><span class="reticle-wing left"></span><span class="reticle-circle"></span><span class="reticle-wing right"></span><span class="reticle-stem"></span></div>
 
     <div class="scene-caption"><span class="caption-line"></span><div><strong>OPEN SKY</strong><small>自由探索這片天空</small></div></div>
+    <div id="remote-labels" class="remote-labels" aria-hidden="true"></div>
+    <div id="wingman-radar" class="wingman-radar" hidden aria-label="友機雷達"><span>友機雷達</span><div class="radar-face"><i class="radar-center"></i><div id="radar-dots"></div></div></div>
 
     <section class="bottom-controls" aria-label="飛行控制">
       <div class="stick-area">
@@ -70,6 +72,25 @@
 
     <div id="end-screen" class="end-screen" hidden>
       <div class="end-card"><span class="eyebrow">FLIGHT ENDED</span><h1>飛行結束</h1><p>戰機碰到地面或海面了。調整機頭，再試一次！</p><button id="restart-button" type="button">重新起飛 <span>↗</span></button></div>
+    </div>
+    <div id="multiplayer-modal" class="room-modal" hidden>
+      <section class="room-dialog" role="dialog" aria-modal="true" aria-labelledby="room-title">
+        <button id="room-close" class="room-close" type="button" aria-label="關閉多人連線">×</button>
+        <span class="eyebrow">MULTIPLAYER / 同一片天空</span><h1 id="room-title">多人連線</h1>
+        <p class="room-description">建立房間或輸入房間代碼，和朋友一起飛行。每間最多 8 人。</p>
+        <div id="room-setup">
+          <label class="room-field">飛行員名稱<input id="pilot-name" maxlength="14" placeholder="輸入名稱" autocomplete="off"></label>
+          <button id="create-room" class="room-primary" type="button">建立新房間 <span>↗</span></button>
+          <div class="room-divider"><span></span>或加入現有房間<span></span></div>
+          <div class="room-join"><label class="room-field"><span class="sr-only">房間代碼</span><input id="room-code-input" maxlength="6" placeholder="輸入 6 位代碼" autocomplete="off" autocapitalize="characters" spellcheck="false"></label><button id="join-room" type="button">加入</button></div>
+        </div>
+        <div id="room-active" hidden>
+          <div class="room-code-box"><span>房間代碼</span><strong id="room-code-display">------</strong><small id="room-count">連線中</small></div>
+          <label class="room-field room-link-label">邀請連結<input id="room-link" readonly aria-label="邀請連結"></label>
+          <div class="room-actions"><button id="copy-room" class="room-primary" type="button">複製邀請連結</button><button id="leave-room" type="button">離開房間</button></div>
+        </div>
+        <p id="room-message" class="room-message" role="status" aria-live="polite"></p>
+      </section>
     </div>
     <div id="error-screen" class="end-screen" hidden><div class="end-card"><span class="eyebrow">WEBGL REQUIRED</span><h1>無法啟動 3D 畫面</h1><p>請使用支援 WebGL 的瀏覽器，並確認已開啟硬體加速。</p></div></div>
   </main>

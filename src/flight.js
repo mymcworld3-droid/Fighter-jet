@@ -37,7 +37,8 @@ export function updateFlight(state, input, elapsed) {
 
   state.pitchRate += (y * 0.45 - state.pitchRate) * (1 - Math.exp(-4.5 * dt));
   state.pitch = clamp(state.pitch + state.pitchRate * dt, -0.68, 0.68);
-  state.roll += (-x * 0.78 - state.roll) * (1 - Math.exp(-3.5 * dt));
+  // Full stick permits an approximately 85° bank while keeping pitch and yaw controllable.
+  state.roll += (-x * 1.48 - state.roll) * (1 - Math.exp(-3.5 * dt));
   state.yaw = (state.yaw + x * 0.43 * dt + Math.PI * 2) % (Math.PI * 2);
   const targetSpeed = 105 + throttle * 200;
   state.speed += (targetSpeed - state.speed) * (1 - Math.exp(-0.25 * dt));

@@ -213,6 +213,15 @@ function makeWorldEffects(effects,s,eye,look,up){
   return {smoke,shots};
 }
 
+function projectWorld(viewProjection,p,canvas){
+  if(!viewProjection)return null;
+  const m=viewProjection,[x,y,z]=p;
+  const w=m[3]*x+m[7]*y+m[11]*z+m[15];if(w<=0)return null;
+  const nx=(m[0]*x+m[4]*y+m[8]*z+m[12])/w,ny=(m[1]*x+m[5]*y+m[9]*z+m[13])/w;
+  if(Math.abs(nx)>1.1||Math.abs(ny)>1.1)return null;
+  return {x:(nx*.5+.5)*canvas.clientWidth,y:(.5-ny*.5)*canvas.clientHeight};
+}
+
 export class FlightRenderer {
   constructor(canvas){
     this.canvas=canvas; this.gl=canvas.getContext('webgl',{alpha:true,antialias:true,powerPreference:'high-performance'}) || canvas.getContext('experimental-webgl');
@@ -225,6 +234,7 @@ export class FlightRenderer {
     gl.enable(gl.DEPTH_TEST);gl.clearColor(0,0,0,0);this.camera=null;this.cameraMode='chase';
   }
   toggleCamera(){this.cameraMode=this.cameraMode==='chase'?'nose':'chase';this.camera=null;return this.cameraMode;}
+  projectPoint(point){return projectWorld(this.viewProjection,point,this.canvas);}
   resize(){
     const ratio=Math.min(window.devicePixelRatio || 1,1.5),w=Math.max(1,Math.floor(this.canvas.clientWidth*ratio)),h=Math.max(1,Math.floor(this.canvas.clientHeight*ratio));
     if(this.canvas.width!==w||this.canvas.height!==h){this.canvas.width=w;this.canvas.height=h;this.gl.viewport(0,0,w,h);}
@@ -234,7 +244,7 @@ export class FlightRenderer {
     for(const [name,buffer,size] of [['aPosition',mesh.position,3],['aNormal',mesh.normal,3],['aColor',mesh.color,3],['aAlpha',mesh.alpha,1]]){const loc=this.attributes[name];gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,size,gl.FLOAT,false,0,0);}
     gl.uniformMatrix4fv(this.uniforms.uModel,false,model);gl.uniform1f(this.uniforms.uWater,water);gl.drawArrays(gl.TRIANGLES,0,mesh.count);
   }
-  render(s,dt,time,effects){
+  render(s,dt,time,effects,peers=[]){
     this.resize();const gl=this.gl;gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
     const model=aircraftMatrix(s);
     const desired=this.cameraMode==='chase'?transformPoint(model,chaseCameraOffset(s.speed)):transformPoint(model,[0,3,-11]);
@@ -244,15 +254,23 @@ export class FlightRenderer {
     const k=cameraDamping(dt,s.speed,this.cameraMode==='chase');for(let i=0;i<3;i++)this.camera[i]+=(desired[i]-this.camera[i])*k;
     const up=this.cameraMode==='chase'?[Math.sin(-s.roll)*.25,1,0]:[model[4],model[5],model[6]];
     const projection=perspective(cameraFov(s.speed,this.canvas.clientWidth<this.canvas.clientHeight)*Math.PI/180,this.canvas.width/this.canvas.height,.5,150000);
-    gl.uniformMatrix4fv(this.uniforms.uViewProjection,false,multiply(projection,lookAt(this.camera,look,up)));
+    this.viewProjection=multiply(projection,lookAt(this.camera,look,up));
+    gl.uniformMatrix4fv(this.uniforms.uViewProjection,false,this.viewProjection);
     gl.uniform3fv(this.uniforms.uCamera,this.camera);gl.uniform1f(this.uniforms.uTime,time);
     const world=identity();this.drawMesh(this.sea,world,1);this.drawMesh(this.terrain,world);this.drawMesh(this.airport,world);this.drawMesh(this.clouds,world);
     if(this.cameraMode==='chase')this.drawMesh(this.jet,model);
+    for(const peer of peers)this.drawMesh(this.jet,aircraftMatrix(peer.flight));
     const fx=makeWorldEffects(effects,s,this.camera,look,up);
     gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.depthMask(false);
     replaceGeometry(gl,this.dynamic,fx.smoke);this.drawMesh(this.dynamic,world);
     if(!s.crashed){replaceGeometry(gl,this.dynamic,makeFlame(s,time));this.drawMesh(this.dynamic,model);}
     replaceGeometry(gl,this.dynamic,fx.shots);this.drawMesh(this.dynamic,world);
+    for(const peer of peers){
+      const other=makeWorldEffects(peer.effects,peer.flight,this.camera,look,up);
+      replaceGeometry(gl,this.dynamic,other.smoke);this.drawMesh(this.dynamic,world);
+      if(!peer.flight.crashed){replaceGeometry(gl,this.dynamic,makeFlame(peer.flight,time));this.drawMesh(this.dynamic,aircraftMatrix(peer.flight));}
+      replaceGeometry(gl,this.dynamic,other.shots);this.drawMesh(this.dynamic,world);
+    }
     gl.depthMask(true);gl.disable(gl.BLEND);
   }
 }
@@ -267,7 +285,8 @@ export class SoftwareFlightRenderer {
     this.jet=makeJet();this.camera=null;this.cameraMode='chase';this.lastRender=-1;
   }
   toggleCamera(){this.cameraMode=this.cameraMode==='chase'?'nose':'chase';this.camera=null;return this.cameraMode;}
-  render(s,dt,time,effects){
+  projectPoint(point){return projectWorld(this.viewProjection,point,this.canvas);}
+  render(s,dt,time,effects,peers=[]){
     if(time-this.lastRender<1/30)return;
     const renderDt=this.lastRender<0?dt:time-this.lastRender;this.lastRender=time;
     const canvas=this.canvas,ratio=Math.min(window.devicePixelRatio||1,1),w=Math.max(1,Math.floor(canvas.clientWidth*ratio)),h=Math.max(1,Math.floor(canvas.clientHeight*ratio));
@@ -280,6 +299,7 @@ export class SoftwareFlightRenderer {
     const up=this.cameraMode==='chase'?[Math.sin(-s.roll)*.25,1,0]:[model[4],model[5],model[6]];
     const backwards=normalize(sub(this.camera,look)),right=normalize(cross(up,backwards)),cameraUp=cross(backwards,right),eye=this.camera;
     const focal=h/(2*Math.tan(cameraFov(s.speed,canvas.clientWidth<canvas.clientHeight)*Math.PI/360));
+    this.viewProjection=multiply(perspective(cameraFov(s.speed,canvas.clientWidth<canvas.clientHeight)*Math.PI/180,w/h,.5,150000),lookAt(eye,look,up));
     const toCamera=(x,y,z)=>{const a=x-eye[0],b=y-eye[1],c=z-eye[2];return [a*right[0]+b*right[1]+c*right[2],a*cameraUp[0]+b*cameraUp[1]+c*cameraUp[2],-(a*backwards[0]+b*backwards[1]+c*backwards[2])];};
     const project=p=>[w/2+p[0]*focal/p[2],h/2-p[1]*focal/p[2]];
     // Clip against the near plane, so triangles remain valid as the camera moves through them.
@@ -311,6 +331,7 @@ export class SoftwareFlightRenderer {
     };
     for(const mesh of this.scene)collect(mesh,null);if(this.cameraMode==='chase')collect(this.jet,model);
     const fx=makeWorldEffects(effects,s,eye,look,up);collect(fx.smoke,null);collect(fx.shots,null);if(!s.crashed)collect(makeFlame(s,time),model);
+    for(const peer of peers){const otherModel=aircraftMatrix(peer.flight),other=makeWorldEffects(peer.effects,peer.flight,eye,look,up);collect(this.jet,otherModel);collect(other.smoke,null);collect(other.shots,null);if(!peer.flight.crashed)collect(makeFlame(peer.flight,time),otherModel);}
     polygons.sort((a,b)=>b.depth-a.depth);
     for(const poly of polygons){ctx.fillStyle=poly.color;ctx.beginPath();ctx.moveTo(...poly.points[0]);for(let j=1;j<poly.points.length;j++)ctx.lineTo(...poly.points[j]);ctx.closePath();ctx.fill();}
   }
