@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#101d2a">
+  <meta name="description" content="駕駛戰機飛越海島的 3D 飛行模擬器。">
+  <title>SKYWARD | 3D 戰鬥機模擬器</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="simulator" aria-label="3D 戰鬥機模擬器">
+    <canvas id="world" aria-label="飛行畫面"></canvas>
+    <div class="screen-tint" aria-hidden="true"></div>
+
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div>
+        <div><div class="brand-title">SKYWARD <span> / 01</span></div><div class="brand-subtitle">FIGHTER FLIGHT SIMULATOR</div></div>
+      </div>
+      <div class="flight-status"><span class="status-dot"></span><span id="flight-status">飛行中</span><span class="status-divider"></span><span>自由飛行</span></div>
+    </header>
+
+    <div class="compass" aria-label="航向">
+      <span class="compass-line"></span><span class="compass-arrow">▼</span>
+      <span class="compass-label">HEADING</span><strong id="heading">000°</strong><span id="direction">N</span>
+    </div>
+
+    <section class="readouts" aria-label="飛行資訊">
+      <div class="readout"><span class="readout-name">AIRSPEED <i>速度</i></span><div><strong id="speed">612</strong><small>KM/H</small></div><span class="meter"><b id="speed-meter"></b></span></div>
+      <div class="readout"><span class="readout-name">ALTITUDE <i>高度</i></span><div><strong id="altitude">360</strong><small>M</small></div><span class="meter"><b id="altitude-meter"></b></span></div>
+    </section>
+
+    <div class="reticle" aria-hidden="true"><span class="reticle-wing left"></span><span class="reticle-circle"></span><span class="reticle-wing right"></span><span class="reticle-stem"></span></div>
+
+    <div class="scene-caption"><span class="caption-line"></span><div><strong>OPEN SKY</strong><small>自由探索這片天空</small></div></div>
+
+    <section class="bottom-controls" aria-label="飛行控制">
+      <div class="stick-area">
+        <div class="control-heading"><span>01 / FLIGHT CONTROL</span><strong>飛行操控</strong></div>
+        <div class="joystick-wrap">
+          <div id="joystick" class="joystick" role="application" aria-label="飛行搖桿：向上抬高機頭，向下降低機頭，左右轉向並傾斜" tabindex="0">
+            <span class="stick-grid h"></span><span class="stick-grid v"></span>
+            <span class="stick-tick top">⌃</span><span class="stick-tick bottom">⌄</span><span class="stick-tick left">‹</span><span class="stick-tick right">›</span>
+            <span id="stick-knob" class="stick-knob"><span></span></span>
+          </div>
+          <div class="stick-instructions"><span><b>↑ ↓</b> 機頭升降</span><span><b>← →</b> 轉向 / 傾斜</span></div>
+        </div>
+      </div>
+
+      <div class="right-controls">
+        <div class="control-heading align-right"><span>02 / ENGINE POWER</span><strong>引擎推力</strong></div>
+        <div class="throttle-card">
+          <div class="throttle-top"><span>THROTTLE</span><strong id="throttle-value">65<small>%</small></strong></div>
+          <div class="throttle-input"><span>−</span><input id="throttle" type="range" min="25" max="100" value="65" aria-label="引擎推力"><span>＋</span></div>
+        </div>
+        <div class="action-row"><button id="camera-button" type="button" aria-label="切換視角">◉ <span>切換視角</span></button><button id="reset-button" type="button" aria-label="重新開始飛行">↻ <span>重新開始</span></button></div>
+      </div>
+    </section>
+
+    <div class="keyboard-hint">鍵盤 <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 或方向鍵飛行 <span>·</span> <kbd>V</kbd> 切換視角</div>
+    <div id="message" class="message" role="status" aria-live="polite">向上推搖桿抬高機頭，左右推動即可轉彎</div>
+
+    <div id="end-screen" class="end-screen" hidden>
+      <div class="end-card"><span class="eyebrow">FLIGHT ENDED</span><h1>飛行結束</h1><p>戰機碰到地面或海面了。調整機頭，再試一次！</p><button id="restart-button" type="button">重新起飛 <span>↗</span></button></div>
+    </div>
+    <div id="error-screen" class="end-screen" hidden><div class="end-card"><span class="eyebrow">WEBGL REQUIRED</span><h1>無法啟動 3D 畫面</h1><p>請使用支援 WebGL 的瀏覽器，並確認已開啟硬體加速。</p></div></div>
+  </main>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
