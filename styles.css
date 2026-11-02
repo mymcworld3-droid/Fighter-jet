@@ -50,3 +50,5 @@ html,body{overscroll-behavior:none}
 .gear-button{display:flex;align-items:center;justify-content:space-between;width:100%;min-height:36px;margin-top:8px;padding:0 11px;border:1px solid rgba(222,248,241,.3);border-radius:6px;color:#eafaf5;background:rgba(15,38,42,.57);font-size:11px;touch-action:manipulation}.gear-button strong{font-size:10px;color:#d2e8e1}.gear-button[aria-pressed="true"]{border-color:#a9f7d1;color:#dcfff1;background:rgba(31,83,70,.78)}.gear-button[aria-pressed="true"] strong{color:#a8ffd5}
 @media(max-width:700px){.gear-button{min-height:34px;font-size:10px}}
 @media(max-height:500px) and (orientation:landscape){.gear-button{min-height:30px;margin-top:5px;padding:0 8px}.gear-button strong{font-size:9px}}
+.simulator button,.simulator a,.simulator input,.simulator select,.simulator textarea{touch-action:manipulation}
+.simulator .fire-button{touch-action:none}

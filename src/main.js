@@ -5,12 +5,12 @@ import { FlightRenderer, SoftwareFlightRenderer } from './renderer.js';
 import { SpeedLines, SpeedWarp } from './speed-effects.js';
 import { MultiplayerClient, createRoomCode, validRoomCode } from './multiplayer.js';
 import { FLIGHT_GATES, updateCourse } from './course.js';
+import { installZoomGuard } from './touch-zoom.js';
 
 const $ = id => document.getElementById(id);
 const canvas=$('world'), joystick=$('joystick'), knob=$('stick-knob'), throttle=$('throttle'), fireButton=$('fire-button');
 const surface=document.querySelector('.simulator');
-for(const event of ['gesturestart','gesturechange','dblclick'])surface.addEventListener(event,e=>e.preventDefault(),{passive:false});
-surface.addEventListener('touchmove',e=>{if(e.touches.length>1)e.preventDefault();},{passive:false});
+installZoomGuard(surface,document);
 let renderer;
 try { renderer=new FlightRenderer(canvas); }
 catch (error) {
@@ -24,6 +24,7 @@ if(renderer){
   const speedLines=new SpeedLines($('speed-lines'));
   const speedWarp=new SpeedWarp($('speed-warp'),canvas);
   const groundHeight=(x,z)=>renderer.groundHeight(x,z);
+  const groundNormal=(x,z)=>renderer.groundNormal(x,z);
   const keys=new Set();
   const message=(text,duration=3000)=>{
     const el=$('message');el.textContent=text;el.classList.remove('is-hidden');clearTimeout(messageTimer);
@@ -61,7 +62,7 @@ if(renderer){
   function toggleGear(){
     const down=!flight.gearDown;
     if(!setLandingGear(flight,down)){if(flight.onGround)message('離地後才能收起起落架');return;}
-    updateGearButton();message(down?`起落架放下中；速度低於 ${Math.round(LANDING_SPEED_LIMIT*3.6)} km/h，放平機翼並平緩下降`:'起落架收起中',5000);
+    updateGearButton();message(down?`起落架放下中；速度低於 ${Math.round(LANDING_SPEED_LIMIT*3.6)} km/h，機身貼合地面並平緩下降`:'起落架收起中',5000);
   }
   $('gear-button').addEventListener('click',toggleGear);
   const fireControl=bindPointerControl(fireButton,{canStart:()=>!flight.crashed,start:()=>{pendingShot=true;updateFireButton();},end:updateFireButton});
@@ -194,13 +195,13 @@ if(renderer){
     // Substeps preserve elapsed-time motion on slower devices and avoid skipping collisions.
     for(let remaining=dt;remaining>0;){
       const step=Math.min(remaining,.025),previous={x:flight.x,y:flight.y,z:flight.z};
-      updateFlight(flight,input,step,groundHeight);
+      updateFlight(flight,input,step,groundHeight,groundNormal);
       if(!flight.crashed&&updateCourse(passedGates,previous,flight))message(`飛行環 ${passedGates.size} / ${FLIGHT_GATES.length}！`);
       updateEffects(effects,flight,fireControl.active()||keys.has(' ')||pendingShot,step);pendingShot=false;remaining-=step;
     }
     if(wasFlying&&flight.crashed){
       releaseControls();$('flight-status').textContent='飛行結束';
-      $('crash-detail').textContent=flight.crashReason==='water'?'戰機碰到海面了；請選擇陸地降落。':flight.crashReason==='gear'?'接地前請先放下起落架，並等輪子完全放下。':'接地時速度、下降速度或傾斜過大，請減速並平緩下降。';
+      $('crash-detail').textContent=flight.crashReason==='water'?'戰機碰到海面了；請選擇陸地降落。':flight.crashReason==='gear'?'接地前請先放下起落架，並等輪子完全放下。':'接地時速度、下降速度或與地面的夾角過大，請貼合地形並平緩下降。';
       $('end-screen').hidden=false;
     }else if(!wasOnGround&&flight.onGround){$('flight-status').textContent='已落地';message('平穩落地！加速並抬高機頭可再次起飛',5000);}
     else if(wasOnGround&&!flight.onGround){$('flight-status').textContent='飛行中';message('已起飛，可收起起落架',3500);}

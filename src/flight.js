@@ -1,4 +1,5 @@
 // Small, deterministic flight model shared by the renderer and the tests.
+import { aircraftMatrix } from './math.js';
 export const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 export const ISLANDS = [
@@ -42,19 +43,43 @@ export function terrainHeight(x, z) {
 
 // Match the rendered terrain triangles, including the lower-detail Canvas mesh.
 // This prevents invisible mountain collisions between mesh vertices.
-export function terrainMeshHeight(x,z,steps){
+function terrainMeshValues(x,z,steps){
   const half=TERRAIN_SIZE/2;
-  if(x< -half||x>half||z< -half||z>half)return 0;
+  if(x< -half||x>half||z< -half||z>half)return [0,0,0];
+  // The runway replaces the terrain underneath and is level at y=30.
+  if(x>=-63&&x<=63&&z>=-1450&&z<=180)return [30,0,0];
   const size=TERRAIN_SIZE/steps,ix=Math.min(steps-1,Math.floor((x+half)/size)),iz=Math.min(steps-1,Math.floor((z+half)/size));
   const left=-half+ix*size,near=-half+iz*size,u=(x-left)/size,v=(z-near)/size;
   const a=terrainHeight(left,near),b=terrainHeight(left,near+size),c=terrainHeight(left+size,near+size),d=terrainHeight(left+size,near);
   const ground=u<v?a*(1-v)+b*(v-u)+c*u:a*(1-u)+c*v+d*(u-v);
-  // The runway is a raised surface above the surrounding terrain mesh.
-  return x>=-63&&x<=63&&z>=-1450&&z<=180?Math.max(ground,30):ground;
+  const dx=u<v?(c-b)/size:(d-a)/size,dz=u<v?(b-a)/size:(c-d)/size;
+  return [ground,dx,dz];
 }
+export function terrainMeshHeight(x,z,steps){return terrainMeshValues(x,z,steps)[0];}
+export function terrainMeshNormal(x,z,steps){
+  const [,dx,dz]=terrainMeshValues(x,z,steps),length=Math.hypot(dx,1,dz);
+  return [-dx/length,1/length,-dz/length];
+}
+// Fallback for custom height functions used by alternate worlds and tests.
+export function surfaceNormal(groundHeight,x,z){
+  const distance=1,dx=(groundHeight(x+distance,z)-groundHeight(x-distance,z))/(2*distance),dz=(groundHeight(x,z+distance)-groundHeight(x,z-distance))/(2*distance),length=Math.hypot(dx,1,dz);
+  return [-dx/length,1/length,-dz/length];
+}
+export function groundAttitude(yaw,normal){
+  const [nx,ny,nz]=normal,s=Math.sin(yaw),c=Math.cos(yaw);
+  const pitch=Math.atan2(-(nx*s-nz*c),ny);
+  const roll=Math.atan2(-(nx*c+nz*s)*Math.cos(pitch),ny);
+  return {pitch,roll};
+}
+export function relativeGroundAngles(state,normal){
+  const m=aircraftMatrix(state),dot=(x,y,z)=>x*normal[0]+y*normal[1]+z*normal[2];
+  return {pitch:Math.asin(clamp(dot(-m[8],-m[9],-m[10]),-1,1)),roll:Math.atan2(dot(m[0],m[1],m[2]),dot(m[4],m[5],m[6]))};
+}
+// Vertical separation needed for the wheels to rest on a tilted plane.
+export function groundClearance(normal){return LANDING_GEAR_CLEARANCE/clamp(normal[1],.45,1);}
 
 export function createFlight() {
-  return { x: 0, y: 340, z: 1050, yaw: 0, pitch: 0, roll: 0, pitchRate: 0, speed: 200, throttle: 0.65, gearDown:false, gearPosition:0, onGround:false, groundTime:0, crashed:false, crashReason:null };
+  return { x: 0, y: 340, z: 1050, yaw: 0, pitch: 0, roll: 0, pitchRate: 0, speed: 200, throttle: 0.65, gearDown:false, gearPosition:0, onGround:false, groundTime:0, groundClearance:LANDING_GEAR_CLEARANCE, crashed:false, crashReason:null };
 }
 
 export function setLandingGear(state,down){
@@ -64,7 +89,7 @@ export function setLandingGear(state,down){
 }
 
 /** input.x: right positive; input.y: up positive. All rates are time based. */
-export function updateFlight(state, input, elapsed, groundHeight=terrainHeight) {
+export function updateFlight(state, input, elapsed, groundHeight=terrainHeight,groundNormal=null) {
   if (state.crashed) return state;
   const dt = clamp(elapsed, 0, 0.05);
   const x = clamp(Number(input.x) || 0, -1, 1);
@@ -79,15 +104,19 @@ export function updateFlight(state, input, elapsed, groundHeight=terrainHeight) 
     const power=(throttle-.25)/.75;
     state.speed=Math.max(0,state.speed+(16*power-4-.0005*state.speed*state.speed)*dt);
     state.yaw=(state.yaw+x*.24*clamp(state.speed/30,0,1)*dt+Math.PI*2)%(Math.PI*2);
-    state.roll+=(0-state.roll)*(1-Math.exp(-5*dt));
-    state.pitch+=(Math.max(0,y)*.18-state.pitch)*(1-Math.exp(-3.5*dt));
-    state.pitchRate=0;
     state.x+=Math.sin(state.yaw)*state.speed*dt;
     state.z-=Math.cos(state.yaw)*state.speed*dt;
     const ground=groundHeight(state.x,state.z);
     if(ground<=.25){state.onGround=false;state.crashed=true;state.crashReason='water';return state;}
-    state.y=ground+LANDING_GEAR_CLEARANCE;
-    if(state.groundTime>.8&&state.speed>=65&&y>.35&&state.pitch>.05){
+    const normal=groundNormal?groundNormal(state.x,state.z):surfaceNormal(groundHeight,state.x,state.z);
+    const attitude=groundAttitude(state.yaw,normal);
+    state.roll+=(attitude.roll-state.roll)*(1-Math.exp(-5*dt));
+    state.pitch+=(clamp(attitude.pitch+Math.max(0,y)*.18,-.68,.68)-state.pitch)*(1-Math.exp(-3.5*dt));
+    state.pitchRate=0;
+    const currentClearance=Number.isFinite(state.groundClearance)?state.groundClearance:groundClearance(normal);
+    state.groundClearance=currentClearance+(groundClearance(normal)-currentClearance)*(1-Math.exp(-6*dt));
+    state.y=ground+state.groundClearance;
+    if(state.groundTime>.8&&state.speed>=65&&y>.35&&state.pitch-attitude.pitch>.05){
       state.onGround=false;state.y+=.1;
     }
     return state;
@@ -107,12 +136,17 @@ export function updateFlight(state, input, elapsed, groundHeight=terrainHeight) 
   state.y += Math.sin(state.pitch) * state.speed * dt;
   state.y = Math.min(state.y, 8000);
   const ground=groundHeight(state.x,state.z);
-  if(state.y<=Math.max(0,ground)+LANDING_GEAR_CLEARANCE){
+  // Defer the normal calculation until the aircraft is close to the surface.
+  if(state.y>Math.max(0,ground)+LANDING_GEAR_CLEARANCE/.45)return state;
+  const normal=ground>.25?(groundNormal?groundNormal(state.x,state.z):surfaceNormal(groundHeight,state.x,state.z)):[0,1,0];
+  const clearance=groundClearance(normal);
+  if(state.y<=Math.max(0,ground)+clearance){
     const previousGround=Math.max(0,groundHeight(oldX,oldZ));
     const sink=dt>0?Math.max(0,(oldY-state.y+ground-previousGround)/dt):0;
+    const angles=relativeGroundAngles(state,normal);
     const safe=ground>.25&&state.gearDown&&state.gearPosition>=.95&&state.speed<=LANDING_SPEED_LIMIT&&sink<=LANDING_SINK_LIMIT&&
-      Math.abs(state.roll)<=LANDING_ROLL_LIMIT&&state.pitch>=LANDING_PITCH_MIN&&state.pitch<=LANDING_PITCH_MAX;
-    if(safe){state.y=ground+LANDING_GEAR_CLEARANCE;state.onGround=true;state.groundTime=0;state.pitchRate=0;}
+      Math.abs(angles.roll)<=LANDING_ROLL_LIMIT&&angles.pitch>=LANDING_PITCH_MIN&&angles.pitch<=LANDING_PITCH_MAX;
+    if(safe){state.y=ground+clearance;state.groundClearance=clearance;state.onGround=true;state.groundTime=0;state.pitchRate=0;}
     else {state.crashed=true;state.crashReason=ground<=.25?'water':!state.gearDown||state.gearPosition<.95?'gear':'landing';}
   }
   return state;

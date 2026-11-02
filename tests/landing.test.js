@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createFlight,setLandingGear,updateFlight,terrainMeshHeight,CANVAS_TERRAIN_STEPS,WEBGL_TERRAIN_STEPS} from '../src/flight.js';
+import {createFlight,setLandingGear,updateFlight,terrainMeshHeight,terrainMeshNormal,surfaceNormal,groundAttitude,relativeGroundAngles,groundClearance,CANVAS_TERRAIN_STEPS,WEBGL_TERRAIN_STEPS,TERRAIN_SIZE} from '../src/flight.js';
 
 const ground=()=>27;
 const approach=(overrides={})=>({...createFlight(),x:0,z:-500,y:35.2,speed:100,throttle:.25,pitch:-.06,gearDown:true,gearPosition:1,...overrides});
@@ -37,5 +37,49 @@ test('the collision surface includes the raised runway',()=>{
     const renderedGround=(x,z)=>terrainMeshHeight(x,z,steps),plane=approach({y:38.2});
     assert.equal(renderedGround(0,-500),30);updateFlight(plane,{x:0,y:0},.05,renderedGround);
     assert(plane.onGround);assert.equal(plane.y,38);
+  }
+});
+
+test('terrain-aligned aircraft can land on uphill and sideways slopes',()=>{
+  const uphill=(x,z)=>100-.6*z;
+  const noseUp=approach({x:0,z:0,y:100+groundClearance(surfaceNormal(uphill,0,0))+.05,speed:80,pitch:Math.atan(.6)-.02,roll:0});
+  updateFlight(noseUp,{x:0,y:0},.05,uphill);
+  assert(noseUp.pitch>.30);assert(noseUp.onGround&&!noseUp.crashed);
+
+  const sideways=(x,z)=>100+.55*x;
+  const banked=approach({x:0,z:0,y:100+groundClearance(surfaceNormal(sideways,0,0))+.05,pitch:-.06,roll:Math.atan(.55)});
+  updateFlight(banked,{x:0,y:0},.05,sideways);
+  assert(banked.roll>.35);assert(banked.onGround&&!banked.crashed);
+});
+
+test('level aircraft cannot land against a steep surface at an unsafe relative angle',()=>{
+  const uphill=(x,z)=>100-.6*z;
+  const plane=approach({x:0,z:0,y:100+groundClearance(surfaceNormal(uphill,0,0))+.05,speed:40,pitch:0,roll:0});
+  updateFlight(plane,{x:0,y:0},.05,uphill);
+  assert(plane.crashed);assert.equal(plane.crashReason,'landing');
+});
+
+test('grounded orientation follows the local slope and allows takeoff relative to it',()=>{
+  const slope=(x,z)=>100+.3*x-.4*z,normal=surfaceNormal(slope,0,0);
+  const plane=approach({x:0,z:0,y:108,speed:0,pitch:0,roll:0,yaw:1.1,onGround:true,groundTime:0});
+  for(let i=0;i<250;i++)updateFlight(plane,{x:0,y:0},.02,slope);
+  const relative=relativeGroundAngles(plane,normal);
+  assert(Math.abs(relative.pitch)<1e-5&&Math.abs(relative.roll)<1e-5);
+  assert(Math.abs(plane.y-(slope(plane.x,plane.z)+groundClearance(normal)))<1e-5);
+  const target=groundAttitude(plane.yaw,normal);assert(Math.abs(plane.pitch-target.pitch)<1e-5);
+  plane.throttle=1;
+  for(let i=0;i<1000&&plane.onGround;i++)updateFlight(plane,{x:0,y:1},.02,slope);
+  assert(!plane.onGround&&!plane.crashed);assert(plane.pitch-target.pitch>.05);
+});
+
+test('rendered triangle normals match their height gradients and the runway is level',()=>{
+  for(const steps of [CANVAS_TERRAIN_STEPS,WEBGL_TERRAIN_STEPS]){
+    const size=TERRAIN_SIZE/steps,half=TERRAIN_SIZE/2,ix=Math.floor((5800+half)/size),iz=Math.floor((-5500+half)/size);
+    const left=-half+ix*size,near=-half+iz*size;
+    for(const [u,v] of [[.2,.8],[.8,.2]]){
+      const x=left+u*size,z=near+v*size,normal=terrainMeshNormal(x,z,steps),sampled=surfaceNormal((xx,zz)=>terrainMeshHeight(xx,zz,steps),x,z);
+      for(let i=0;i<3;i++)assert(Math.abs(normal[i]-sampled[i])<1e-8);
+    }
+    assert.deepEqual(terrainMeshNormal(0,-500,steps),[-0,1,-0]);
   }
 });

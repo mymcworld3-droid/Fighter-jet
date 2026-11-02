@@ -1,4 +1,4 @@
-import { terrainHeight, terrainMeshHeight, clamp, PARK, TERRAIN_SIZE, WEBGL_TERRAIN_STEPS, CANVAS_TERRAIN_STEPS } from './flight.js';
+import { terrainHeight, terrainMeshHeight, terrainMeshNormal, clamp, PARK, TERRAIN_SIZE, WEBGL_TERRAIN_STEPS, CANVAS_TERRAIN_STEPS } from './flight.js';
 import { identity, perspective, lookAt, multiply, aircraftMatrix, transformPoint, normalize, cross, sub } from './math.js';
 import { cameraFov, chaseCameraOffset, cameraDamping } from './speed-effects.js';
 import { SEA_LEVEL, keepCameraAboveSea, clipTerrainAboveSea, horizonLine, oceanScreenGeometry } from './ocean.js';
@@ -325,6 +325,7 @@ export class FlightRenderer {
   }
   toggleCamera(){this.cameraMode=this.cameraMode==='chase'?'nose':'chase';this.camera=null;return this.cameraMode;}
   groundHeight(x,z){return terrainMeshHeight(x,z,WEBGL_TERRAIN_STEPS);}
+  groundNormal(x,z){return terrainMeshNormal(x,z,WEBGL_TERRAIN_STEPS);}
   projectPoint(point){return projectWorld(this.viewProjection,point,this.canvas);}
   resize(){
     const ratio=Math.min(window.devicePixelRatio || 1,1.5),w=Math.max(1,Math.floor(this.canvas.clientWidth*ratio)),h=Math.max(1,Math.floor(this.canvas.clientHeight*ratio));
@@ -384,6 +385,7 @@ export class SoftwareFlightRenderer {
   }
   toggleCamera(){this.cameraMode=this.cameraMode==='chase'?'nose':'chase';this.camera=null;return this.cameraMode;}
   groundHeight(x,z){return terrainMeshHeight(x,z,CANVAS_TERRAIN_STEPS);}
+  groundNormal(x,z){return terrainMeshNormal(x,z,CANVAS_TERRAIN_STEPS);}
   projectPoint(point){return projectWorld(this.viewProjection,point,this.canvas);}
   render(s,dt,time,effects,peers=[]){
     if(time-this.lastRender<1/30)return;
