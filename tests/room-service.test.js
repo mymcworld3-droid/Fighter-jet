@@ -5,6 +5,7 @@ import { createFlight } from '../src/flight.js';
 import { D1RoomStore, MemoryRoomStore, handleRoomRequest, PRESENCE_TTL } from '../server/room-service.js';
 import { createGameServer } from '../server.js';
 import { MultiplayerClient } from '../src/multiplayer.js';
+import { impactResponse } from '../src/impact.js';
 
 const payload=(n,room='ABC234')=>({action:'sync',room,id:n.toString(16).padStart(32,'0'),token:n.toString(16).padStart(64,'0'),name:`飛行員${n}`,state:{...createFlight(),firing:false,shotsFired:0}});
 const request=p=>new Request('http://localhost/api/multiplayer',{method:'POST',body:JSON.stringify(p)});
@@ -73,4 +74,14 @@ test('peer landing gear and ground state animate from synchronized updates',()=>
   assert.equal(shown.gearPosition,1);
   client.accept([{...peer,state:{...state,gearDown:false,onGround:false}}]);client.advance(.25);
   assert(!shown.gearDown&&!shown.onGround);assert(shown.gearPosition<1);
+});
+test('multiplayer preserves damage and impact motion for remote wreckage',async()=>{
+  const store=new MemoryRoomStore(),a=payload(21),b=payload(22);
+  const response=impactResponse(a.state,{point:[a.state.x-15,a.state.y,a.state.z+6],normal:[0,0,1],part:'left'});
+  a.state.crashed=true;a.state.damage=.8;a.state.damagePart='left';a.state.crashImpact=response;
+  assert.equal((await call(store,{...a,action:'create'})).status,200);
+  const joined=await call(store,{...b,action:'join'}),received=joined.body.peers[0].state;
+  assert.equal(received.damage,.8);assert.equal(received.damagePart,'left');assert.deepEqual(received.crashImpact.postVelocity,response.postVelocity);
+  const invalid=payload(23,'DEF234');invalid.state.damage=2;
+  assert.equal((await call(store,{...invalid,action:'create'})).status,400);
 });

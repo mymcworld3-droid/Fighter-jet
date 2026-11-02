@@ -1,6 +1,6 @@
 import { clamp, createFlight, updateFlight, setLandingGear, LANDING_SPEED_LIMIT } from './flight.js';
 import { bindPointerControl, leverValue } from './controls.js';
-import { createEffects, updateEffects } from './effects.js';
+import { createEffects, updateEffects, registerImpact } from './effects.js';
 import { FlightRenderer, SoftwareFlightRenderer } from './renderer.js';
 import { SpeedLines, SpeedWarp } from './speed-effects.js';
 import { MultiplayerClient, createRoomCode, validRoomCode } from './multiplayer.js';
@@ -8,6 +8,7 @@ import { FLIGHT_GATES, updateCourse } from './course.js';
 import { installZoomGuard } from './touch-zoom.js';
 import { attractionHit } from './attractions.js';
 import { createCrashEffect, updateCrashEffect } from './crash-effects.js';
+import { impactResponse, applyImpact } from './impact.js';
 
 const $ = id => document.getElementById(id);
 const canvas=$('world'), joystick=$('joystick'), knob=$('stick-knob'), throttle=$('throttle'), fireButton=$('fire-button');
@@ -21,7 +22,7 @@ catch (error) {
 }
 
 if(renderer){
-  let flight=createFlight(),effects=createEffects(),stick={x:0,y:0},lastTime=0,messageTimer,pendingShot=false,crash=null;
+  let flight=createFlight(),effects=createEffects(),stick={x:0,y:0},lastTime=0,messageTimer,pendingShot=false,crash=null,impactCooldown=0;
   const passedGates=new Set();
   const speedLines=new SpeedLines($('speed-lines'));
   const speedWarp=new SpeedWarp($('speed-warp'),canvas);
@@ -80,7 +81,7 @@ if(renderer){
     flight.x=clamp(other.x-Math.sin(yaw)*180+Math.cos(yaw)*70,-9999900,9999900);
     flight.z=clamp(other.z+Math.cos(yaw)*180+Math.sin(yaw)*70,-9999900,9999900);
     flight.y=Math.min(8000,Math.max(other.y+20,groundHeight(flight.x,flight.z)+60));
-    flight.yaw=yaw;flight.pitch=other.pitch;flight.roll=0;flight.speed=other.speed;flight.onGround=false;flight.crashed=false;flight.crashReason=null;crash=null;renderer.camera=null;
+    flight.yaw=yaw;flight.pitch=other.pitch;flight.roll=0;flight.speed=other.speed;flight.onGround=false;flight.crashed=false;flight.crashReason=null;flight.crashImpact=null;crash=null;impactCooldown=0;renderer.camera=null;
     $('end-screen').hidden=true;$('flight-status').textContent='飛行中';
   }
   const roomStatus=status=>{
@@ -96,7 +97,7 @@ if(renderer){
     if(status.kind==='expired'){$('room-message').textContent='房間已失效，請重新建立或加入。';message('房間已失效，請重新建立或加入');}
   };
   const multiplayer=new MultiplayerClient({
-    getState:()=>({x:flight.x,y:flight.y,z:flight.z,yaw:flight.yaw,pitch:flight.pitch,roll:flight.roll,speed:flight.speed,throttle:flight.throttle,gearDown:flight.gearDown,onGround:flight.onGround,firing:fireControl.active()||keys.has(' '),shotsFired:effects.shotsFired,crashed:flight.crashed}),
+    getState:()=>({x:flight.x,y:flight.y,z:flight.z,yaw:flight.yaw,pitch:flight.pitch,roll:flight.roll,speed:flight.speed,throttle:flight.throttle,gearDown:flight.gearDown,onGround:flight.onGround,damage:flight.damage,damagePart:flight.damagePart,crashImpact:flight.crashed?flight.crashImpact:null,firing:fireControl.active()||keys.has(' '),shotsFired:effects.shotsFired,crashed:flight.crashed}),
     onStatus:roomStatus,onSpawn:spawnNear
   });
   const errorMessages={invalid_room:'請輸入正確的 6 位房間代碼。',room_not_found:'找不到房間，請確認代碼或請房主重新建立。',room_full:'房間已滿，目前最多 8 人。',room_exists:'房間代碼已使用，請再試一次。',invalid_session:'連線已失效，請重新加入房間。',server_unavailable:'無法連接多人伺服器，請稍後再試。'};
@@ -145,7 +146,7 @@ if(renderer){
   function switchCamera(){const mode=renderer.toggleCamera();message(mode==='chase'?'追蹤視角':'機首視角');}
   function reset(){
     keys.clear();stickControl.cancel();leverControl.cancel();fireControl.cancel();releaseStick();
-    flight=createFlight();effects=createEffects();crash=null;passedGates.clear();pendingShot=false;setThrottle(65);updateFireButton();updateGearButton();renderer.camera=null;
+    flight=createFlight();effects=createEffects();crash=null;impactCooldown=0;passedGates.clear();pendingShot=false;setThrottle(65);updateFireButton();updateGearButton();renderer.camera=null;
     if(multiplayer.peers().length)spawnNear(multiplayer.peers()[0].flight);
     $('end-screen').hidden=true;$('flight-status').textContent='飛行中';lastTime=0;message('已重新起飛，祝你飛行愉快');
   }
@@ -188,6 +189,7 @@ if(renderer){
     $('shots-fired').textContent=effects.shotsFired;
     updateGearButton();
     $('course-count').textContent=`穿越飛行環 ${passedGates.size} / ${FLIGHT_GATES.length}`;
+    $('damage-count').hidden=flight.damage<=0;$('damage-count').textContent=`機體損傷 ${Math.round(flight.damage*100)}%`;
     if(!mapModal.hidden)updateMap();
     $('speed-meter').style.width=`${clamp(speed/1100*100,0,100)}%`;$('altitude-meter').style.width=`${clamp(altitude/2500*100,0,100)}%`;
   }
@@ -198,11 +200,31 @@ if(renderer){
     // Substeps preserve elapsed-time motion on slower devices and avoid skipping collisions.
     for(let remaining=dt;remaining>0;){
       const step=Math.min(remaining,.025),previous={...flight};
+      impactCooldown=Math.max(0,impactCooldown-step);
       updateFlight(flight,input,step,groundHeight,groundNormal);
       if(!previous.crashed){
-        const hit=attractionHit(previous,flight,now/1000-remaining+step,step);
-        if(hit){flight.crashed=true;flight.onGround=false;flight.crashReason='attraction';flight.hitAttraction=hit.kind;}
-        if(flight.crashed){crash=createCrashEffect(flight);renderer.cameraMode='chase';renderer.camera=null;}
+        const hit=!flight.crashed&&impactCooldown<=0?attractionHit(previous,flight,now/1000-remaining+step,step):null;
+        if(hit){
+          const contact={...flight,x:previous.x+(flight.x-previous.x)*hit.fraction,y:previous.y+(flight.y-previous.y)*hit.fraction,z:previous.z+(flight.z-previous.z)*hit.fraction};
+          const incoming={...contact},response=applyImpact(contact,hit);impactCooldown=.4;
+          if(response.normalSpeed>1){
+            registerImpact(effects,hit);
+            if(response.fatal){
+              Object.assign(flight,incoming,{damage:response.damage,damagePart:response.part,crashed:true,onGround:false,crashReason:'attraction',hitAttraction:hit.kind,crashImpact:response});
+              crash=createCrashEffect(incoming,response);
+            }else{
+              Object.assign(flight,contact);
+              const part={nose:'機首',body:'機身',left:'左翼',right:'右翼',tail:'機尾'}[response.part]||'機身';
+              message(`${part}受撞擊・損傷 ${Math.round(flight.damage*100)}%`,3500);
+            }
+          }
+        }
+        if(flight.crashed&&!crash){
+          const incoming={...previous,x:flight.x,y:flight.y,z:flight.z},ground=groundHeight(flight.x,flight.z),normal=ground>.25?groundNormal(flight.x,flight.z):[0,1,0];
+          const response=impactResponse(incoming,{point:[flight.x,Math.max(0,ground),flight.z],normal,part:'body'});
+          flight.crashImpact=response;crash=createCrashEffect(incoming,response);
+        }
+        if(flight.crashed){renderer.cameraMode='chase';renderer.camera=null;}
       }else if(crash)updateCrashEffect(crash,step,groundHeight);
       if(!flight.crashed&&updateCourse(passedGates,previous,flight))message(`飛行環 ${passedGates.size} / ${FLIGHT_GATES.length}！`);
       updateEffects(effects,flight,fireControl.active()||keys.has(' ')||pendingShot,step);pendingShot=false;remaining-=step;
@@ -213,7 +235,7 @@ if(renderer){
       message('戰機受損！',2000);
     }else if(!wasOnGround&&flight.onGround){$('flight-status').textContent='已落地';message('平穩落地！加速並抬高機頭可再次起飛',5000);}
     else if(wasOnGround&&!flight.onGround){$('flight-status').textContent='飛行中';message('已起飛，可收起起落架',3500);}
-    if(crash&&crash.age>=2.8)$('end-screen').hidden=false;
+    if(crash&&crash.age>=3.6)$('end-screen').hidden=false;
     multiplayer.advance(dt,groundHeight);const peers=multiplayer.peers();
     renderer.render(flight,dt,now/1000,effects,peers,crash);updateWingmen(peers);
     speedWarp.render(now/1000,flight.crashed?0:flight.speed,renderer.oceanHorizon);speedLines.render(dt,flight.crashed?0:flight.speed);

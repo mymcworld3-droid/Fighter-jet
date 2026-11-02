@@ -52,3 +52,4 @@ html,body{overscroll-behavior:none}
 @media(max-height:500px) and (orientation:landscape){.gear-button{min-height:30px;margin-top:5px;padding:0 8px}.gear-button strong{font-size:9px}}
 .simulator button,.simulator a,.simulator input,.simulator select,.simulator textarea{touch-action:manipulation}
 .simulator .fire-button{touch-action:none}
+.scene-caption small[hidden]{display:none}.scene-caption #damage-count{color:#ffcf9a}

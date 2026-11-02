@@ -298,6 +298,15 @@ function makeWorldEffects(effects,s,eye,look,up){
     const fraction=particle.age/particle.life;
     disc(smoke,[particle.x,particle.y,particle.z],right,cameraUp,2+fraction*9,[.76,.82,.80],.42*(1-fraction));
   }
+  for(const particle of effects.damageSmoke||[]){
+    const fraction=particle.age/particle.life;
+    disc(smoke,[particle.x,particle.y,particle.z],right,cameraUp,3+fraction*12,[.25,.27,.26],.42*(1-fraction));
+  }
+  for(const impact of effects.impacts||[]){
+    const fade=1-impact.age/impact.life,center=[impact.x,impact.y,impact.z];
+    disc(shots,center,right,cameraUp,10,[1,.35,.05],.6*fade);
+    solidDisc(shots,center,right,cameraUp,3.5,[1,.90,.52],.9*fade);
+  }
   for(const bullet of effects.bullets){
     const p=[bullet.x,bullet.y,bullet.z],direction=normalize([bullet.vx,bullet.vy,bullet.vz]);
     const side=normalize(cross(direction,sub(eye,p))),width=.9+Math.min(2.4,Math.hypot(...sub(eye,p))*.002),tail=p.map((v,i)=>v-direction[i]*48);
@@ -320,14 +329,15 @@ function makeWorldEffects(effects,s,eye,look,up){
 function makeCrashVisual(crash,eye,look,up){
   const g=new Geometry();if(!crash)return g;
   const backwards=normalize(sub(eye,look)),right=normalize(cross(up,backwards)),cameraUp=cross(backwards,right);
-  if(crash.age<.9){
-    const fade=1-crash.age/.9,radius=12+crash.age*65;
-    disc(g,crash.origin,right,cameraUp,radius*1.35,[1,.25,.03],.55*fade);
-    disc(g,crash.origin,right,cameraUp,radius,[1,.60,.10],.85*fade);
-    disc(g,crash.origin,right,cameraUp,radius*.46,[1,.95,.68],.95*fade);
-    solidDisc(g,crash.origin,right,cameraUp,radius*.30,[1,.88,.42],.75*fade);
+  const blastAge=crash.age-crash.explodeAt;
+  if(blastAge>=0&&blastAge<.9){
+    const fade=1-blastAge/.9,radius=12+blastAge*65,body=crash.pieces[1],center=[body.x,body.y,body.z];
+    disc(g,center,right,cameraUp,radius*1.35,[1,.25,.03],.55*fade);
+    disc(g,center,right,cameraUp,radius,[1,.60,.10],.85*fade);
+    disc(g,center,right,cameraUp,radius*.46,[1,.95,.68],.95*fade);
+    solidDisc(g,center,right,cameraUp,radius*.30,[1,.88,.42],.75*fade);
   }
-  const flame=clamp(1-crash.age/2.7,0,1);
+  const flame=clamp((crash.age-.25)/.4,0,1)*clamp(1-crash.age/3.5,0,1);
   if(flame>0)for(const p of [crash.pieces[1],crash.pieces[4]]){
     const center=[p.x,p.y+3,p.z],radius=7+Math.sin(crash.age*22)*1.5;
     disc(g,center,right,cameraUp,radius*1.6,[1,.22,.02],.50*flame);
@@ -375,14 +385,14 @@ export class FlightRenderer {
   }
   render(s,dt,time,effects,peers=[],crash=null){
     this.resize();const gl=this.gl;gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
-    const model=aircraftMatrix(s);
-    const desired=keepCameraAboveSea(this.cameraMode==='chase'?transformPoint(model,chaseCameraOffset(s.speed)):transformPoint(model,[0,3,-11]));
+    const model=aircraftMatrix(s),body=crash?.pieces[1],cameraFlight=body?{...s,...crash.view,x:body.x,y:body.y,z:body.z}:s,cameraModel=body?aircraftMatrix(cameraFlight):model;
+    const desired=keepCameraAboveSea(this.cameraMode==='chase'?transformPoint(cameraModel,chaseCameraOffset(s.speed)):transformPoint(cameraModel,[0,3,-11]));
     // The chase camera rolls gently with the aircraft while preserving the horizon.
-    const look=this.cameraMode==='chase'?transformPoint(model,[0,2,-28]):transformPoint(model,[0,2,-150]);
+    const look=this.cameraMode==='chase'?transformPoint(cameraModel,[0,2,-28]):transformPoint(cameraModel,[0,2,-150]);
     if(!this.camera)this.camera=desired.slice();
     const k=cameraDamping(dt,s.speed,this.cameraMode==='chase');for(let i=0;i<3;i++)this.camera[i]+=(desired[i]-this.camera[i])*k;
     keepCameraAboveSea(this.camera);
-    const up=this.cameraMode==='chase'?[Math.sin(-s.roll)*.25,1,0]:[model[4],model[5],model[6]];
+    const up=this.cameraMode==='chase'?[Math.sin(-cameraFlight.roll)*.25,1,0]:[cameraModel[4],cameraModel[5],cameraModel[6]];
     const fov=cameraFov(s.speed,this.canvas.clientWidth<this.canvas.clientHeight)*Math.PI/180;
     const projection=perspective(fov,this.canvas.width/this.canvas.height,.5,150000);
     const backwards=normalize(sub(this.camera,look)),right=normalize(cross(up,backwards)),cameraUp=cross(backwards,right);
@@ -436,12 +446,13 @@ export class SoftwareFlightRenderer {
     const canvas=this.canvas,ratio=Math.min(window.devicePixelRatio||1,1),w=Math.max(1,Math.floor(canvas.clientWidth*ratio)),h=Math.max(1,Math.floor(canvas.clientHeight*ratio));
     if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}
     const ctx=this.ctx;ctx.clearRect(0,0,w,h);
-    const model=aircraftMatrix(s),desired=keepCameraAboveSea(this.cameraMode==='chase'?transformPoint(model,chaseCameraOffset(s.speed)):transformPoint(model,[0,3,-11]));
-    const look=this.cameraMode==='chase'?transformPoint(model,[0,2,-28]):transformPoint(model,[0,2,-150]);
+    const model=aircraftMatrix(s),body=crash?.pieces[1],cameraFlight=body?{...s,...crash.view,x:body.x,y:body.y,z:body.z}:s,cameraModel=body?aircraftMatrix(cameraFlight):model;
+    const desired=keepCameraAboveSea(this.cameraMode==='chase'?transformPoint(cameraModel,chaseCameraOffset(s.speed)):transformPoint(cameraModel,[0,3,-11]));
+    const look=this.cameraMode==='chase'?transformPoint(cameraModel,[0,2,-28]):transformPoint(cameraModel,[0,2,-150]);
     if(!this.camera)this.camera=desired.slice();
     const smoothing=cameraDamping(renderDt,s.speed,this.cameraMode==='chase');for(let i=0;i<3;i++)this.camera[i]+=(desired[i]-this.camera[i])*smoothing;
     keepCameraAboveSea(this.camera);
-    const up=this.cameraMode==='chase'?[Math.sin(-s.roll)*.25,1,0]:[model[4],model[5],model[6]];
+    const up=this.cameraMode==='chase'?[Math.sin(-cameraFlight.roll)*.25,1,0]:[cameraModel[4],cameraModel[5],cameraModel[6]];
     const backwards=normalize(sub(this.camera,look)),right=normalize(cross(up,backwards)),cameraUp=cross(backwards,right),eye=this.camera;
     const focal=h/(2*Math.tan(cameraFov(s.speed,canvas.clientWidth<canvas.clientHeight)*Math.PI/360));
     const ocean=oceanScreenGeometry({width:w,height:h,right,up:cameraUp,backwards,focal,eyeY:eye[1]});this.oceanHorizon=ocean.horizon;

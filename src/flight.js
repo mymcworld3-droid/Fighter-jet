@@ -79,7 +79,7 @@ export function relativeGroundAngles(state,normal){
 export function groundClearance(normal){return LANDING_GEAR_CLEARANCE/clamp(normal[1],.45,1);}
 
 export function createFlight() {
-  return { x: 0, y: 340, z: 1050, yaw: 0, pitch: 0, roll: 0, pitchRate: 0, speed: 200, throttle: 0.65, gearDown:false, gearPosition:0, onGround:false, groundTime:0, groundClearance:LANDING_GEAR_CLEARANCE, crashed:false, crashReason:null };
+  return { x: 0, y: 340, z: 1050, yaw: 0, pitch: 0, roll: 0, pitchRate: 0, impactRollRate:0, impactYawRate:0, damage:0, damagePart:null, speed: 200, throttle: 0.65, gearDown:false, gearPosition:0, onGround:false, groundTime:0, groundClearance:LANDING_GEAR_CLEARANCE, crashed:false, crashReason:null };
 }
 
 export function setLandingGear(state,down){
@@ -126,8 +126,11 @@ export function updateFlight(state, input, elapsed, groundHeight=terrainHeight,g
   state.pitchRate += (y * 0.45 - state.pitchRate) * (1 - Math.exp(-4.5 * dt));
   state.pitch = clamp(state.pitch + state.pitchRate * dt, -0.68, 0.68);
   // Full stick permits an approximately 85° bank while keeping pitch and yaw controllable.
+  state.roll += (state.impactRollRate||0)*dt;
   state.roll += (-x * 1.48 - state.roll) * (1 - Math.exp(-3.5 * dt));
-  state.yaw = (state.yaw + x * 0.43 * dt + Math.PI * 2) % (Math.PI * 2);
+  state.yaw = (state.yaw + (x * 0.43+(state.impactYawRate||0)) * dt + Math.PI * 2) % (Math.PI * 2);
+  state.impactRollRate=(state.impactRollRate||0)*Math.exp(-2.2*dt);
+  state.impactYawRate=(state.impactYawRate||0)*Math.exp(-2.2*dt);
   const targetSpeed = 105 + throttle * 200 - 70*state.gearPosition;
   state.speed += (targetSpeed - state.speed) * (1 - Math.exp(-0.25 * dt));
   const horizontal = Math.cos(state.pitch) * state.speed * dt;

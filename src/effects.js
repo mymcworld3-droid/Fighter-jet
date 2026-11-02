@@ -1,8 +1,9 @@
 import { aircraftMatrix, transformPoint } from './math.js';
 
 export function createEffects() {
-  return { bullets: [], exhaust: [], shotCooldown: 0, exhaustClock: 0, sequence: 0, shotsFired: 0, flash: 0 };
+  return { bullets: [], exhaust: [], damageSmoke:[], impacts:[], damageClock:0, shotCooldown: 0, exhaustClock: 0, sequence: 0, shotsFired: 0, flash: 0 };
 }
+export function registerImpact(effects,hit){effects.impacts.push({x:hit.point[0],y:hit.point[1],z:hit.point[2],age:0,life:.35});}
 
 // Bullets and exhaust stay in world coordinates after leaving the moving jet.
 export function updateEffects(effects, flight, firing, dt) {
@@ -33,11 +34,23 @@ export function updateEffects(effects, flight, firing, dt) {
       const drift=flight.speed-(125+flight.throttle*110);
       effects.exhaust.push({x:p[0],y:p[1],z:p[2],vx:forward[0]*drift+Math.sin(n*1.7)*3,vy:forward[1]*drift+Math.cos(n*2.3)*2,vz:forward[2]*drift+Math.sin(n*.8)*3,age:0,life:1.35});
     }
+    if((flight.damage||0)>=.10){
+      effects.damageClock+=dt;
+      while(effects.damageClock>=.13){
+        effects.damageClock-=.13;
+        const anchor={nose:[0,1,-15],left:[-10,0,6],right:[10,0,6],tail:[0,2,15],body:[0,1,2]}[flight.damagePart]||[0,1,2];
+        const p=transformPoint(model,anchor),drift=Math.max(0,flight.speed-25);
+        effects.damageSmoke.push({x:p[0],y:p[1],z:p[2],vx:forward[0]*drift,vy:forward[1]*drift+3,vz:forward[2]*drift,age:0,life:1.4});
+      }
+    }
   }
-  for (const item of [...effects.bullets,...effects.exhaust]) {
+  for (const item of [...effects.bullets,...effects.exhaust,...effects.damageSmoke]) {
     item.x+=item.vx*dt;item.y+=item.vy*dt;item.z+=item.vz*dt;item.age+=dt;
   }
   effects.bullets=effects.bullets.filter(item=>item.age<item.life);
   effects.exhaust=effects.exhaust.filter(item=>item.age<item.life);
+  effects.damageSmoke=effects.damageSmoke.filter(item=>item.age<item.life);
+  for(const impact of effects.impacts)impact.age+=dt;
+  effects.impacts=effects.impacts.filter(impact=>impact.age<impact.life);
   return effects;
 }

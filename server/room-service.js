@@ -4,6 +4,8 @@ const ROOM=/^[A-HJ-NP-Z2-9]{6}$/;
 const PLAYER_ID=/^[a-f0-9]{32}$/;
 const TOKEN=/^[a-f0-9]{64}$/;
 const numberIn=(v,min,max)=>typeof v==='number'&&Number.isFinite(v)&&v>=min&&v<=max;
+const parts=new Set(['nose','body','left','right','tail']);
+const vectorIn=(v,limit)=>Array.isArray(v)&&v.length===3&&v.every(n=>numberIn(n,-limit,limit));
 
 function validate(payload) {
   if(!payload||typeof payload!=='object')return null;
@@ -19,7 +21,14 @@ function validate(payload) {
      !numberIn(s.yaw,-7,7)||!numberIn(s.pitch,-1,1)||!numberIn(s.roll,-2,2)||
      !numberIn(s.speed,0,500)||!numberIn(s.throttle,0,1)||!Number.isSafeInteger(s.shotsFired)||s.shotsFired<0||s.shotsFired>10000000||
      typeof s.firing!=='boolean'||typeof s.crashed!=='boolean'||(s.gearDown!==undefined&&typeof s.gearDown!=='boolean')||(s.onGround!==undefined&&typeof s.onGround!=='boolean'))return null;
-  return {action:payload.action,room,id,token,name,state:{x:s.x,y:s.y,z:s.z,yaw:s.yaw,pitch:s.pitch,roll:s.roll,speed:s.speed,throttle:s.throttle,shotsFired:s.shotsFired,firing:s.firing,crashed:s.crashed,gearDown:!!s.gearDown,onGround:!!s.onGround}};
+  if((s.damage!==undefined&&!numberIn(s.damage,0,1))||(s.damagePart!=null&&!parts.has(s.damagePart)))return null;
+  let crashImpact=null;
+  if(s.crashImpact!=null){
+    const p=s.crashImpact;
+    if(!s.crashed||!p||typeof p!=='object'||!parts.has(p.part)||!vectorIn(p.point,10000100)||!vectorIn(p.normal,1.01)||!vectorIn(p.velocity,2000)||!vectorIn(p.postVelocity,2000)||!vectorIn(p.angularVelocity,10)||!vectorIn(p.impulse,2000))return null;
+    crashImpact={part:p.part,point:p.point,normal:p.normal,velocity:p.velocity,postVelocity:p.postVelocity,angularVelocity:p.angularVelocity,impulse:p.impulse};
+  }
+  return {action:payload.action,room,id,token,name,state:{x:s.x,y:s.y,z:s.z,yaw:s.yaw,pitch:s.pitch,roll:s.roll,speed:s.speed,throttle:s.throttle,shotsFired:s.shotsFired,firing:s.firing,crashed:s.crashed,gearDown:!!s.gearDown,onGround:!!s.onGround,damage:s.damage||0,damagePart:s.damagePart||null,crashImpact}};
 }
 
 const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'}});

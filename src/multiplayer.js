@@ -64,7 +64,7 @@ export class MultiplayerClient {
     for(const p of peers){
       if(!p||typeof p.id!=='string'||!p.state)continue;seen.add(p.id);
       let player=this.players.get(p.id);
-      if(!player){player={id:p.id,name:p.name,flight:{...p.state,gearPosition:p.state.gearDown?1:0},target:p.state,effects:createEffects(),crash:p.state.crashed?createCrashEffect(p.state):null,shots:p.state.shotsFired,queuedShot:false,received:timestamp};this.players.set(p.id,player);}
+      if(!player){player={id:p.id,name:p.name,flight:{...p.state,gearPosition:p.state.gearDown?1:0},target:p.state,effects:createEffects(),crash:p.state.crashed?createCrashEffect(p.state,p.state.crashImpact):null,shots:p.state.shotsFired,queuedShot:false,received:timestamp};this.players.set(p.id,player);}
       else {
         if(p.state.shotsFired>player.shots&&!p.state.firing)player.queuedShot=true;
         player.shots=p.state.shotsFired;player.target=p.state;player.name=p.name;player.received=timestamp;
@@ -77,13 +77,13 @@ export class MultiplayerClient {
     for(const [id,p] of this.players){
       const age=(timestamp-p.received)/1000;if(age>12){this.players.delete(id);continue;}
       const s=p.flight,t=p.target,prediction=t.crashed?0:clamp(age,0,.45),horizontal=Math.cos(t.pitch)*t.speed*prediction;
-      if(t.crashed&&!s.crashed)p.crash=createCrashEffect(t);
+      if(t.crashed&&!s.crashed)p.crash=createCrashEffect(t,t.crashImpact);
       else if(!t.crashed&&s.crashed)p.crash=null;
       const target={x:t.x+Math.sin(t.yaw)*horizontal,y:t.onGround?t.y:t.y+Math.sin(t.pitch)*t.speed*prediction,z:t.z-Math.cos(t.yaw)*horizontal};
       const k=1-Math.exp(-7*stepTime);
       for(const key of ['x','y','z'])s[key]+=(target[key]-s[key])*k;
       s.yaw=turn(s.yaw,t.yaw,k);s.pitch+=(t.pitch-s.pitch)*k;s.roll+=(t.roll-s.roll)*k;
-      s.speed=t.speed;s.throttle=t.throttle;s.crashed=t.crashed;s.gearDown=!!t.gearDown;s.onGround=!!t.onGround;
+      s.speed=t.speed;s.throttle=t.throttle;s.crashed=t.crashed;s.gearDown=!!t.gearDown;s.onGround=!!t.onGround;s.damage=t.damage||0;s.damagePart=t.damagePart||null;
       s.gearPosition=clamp((s.gearPosition||0)+clamp((s.gearDown?1:0)-(s.gearPosition||0),-stepTime,stepTime),0,1);
       const firing=(age<1.5&&t.firing)||p.queuedShot;
       for(let left=stepTime;left>0;){const d=Math.min(left,.025);updateEffects(p.effects,s,firing,d);if(p.crash)updateCrashEffect(p.crash,d,groundHeight);left-=d;}
