@@ -5,16 +5,19 @@ const VERTEX = `
 attribute vec3 aPosition;
 attribute vec3 aNormal;
 attribute vec3 aColor;
+attribute float aAlpha;
 uniform mat4 uModel;
 uniform mat4 uViewProjection;
 varying vec3 vPosition;
 varying vec3 vNormal;
 varying vec3 vColor;
+varying float vAlpha;
 void main() {
   vec4 world = uModel * vec4(aPosition, 1.0);
   vPosition = world.xyz;
   vNormal = normalize(mat3(uModel) * aNormal);
   vColor = aColor;
+  vAlpha = aAlpha;
   gl_Position = uViewProjection * world;
 }`;
 const FRAGMENT = `
@@ -26,6 +29,7 @@ precision mediump float;
 varying vec3 vPosition;
 varying vec3 vNormal;
 varying vec3 vColor;
+varying float vAlpha;
 uniform vec3 uCamera;
 uniform float uWater;
 uniform float uTime;
@@ -39,7 +43,7 @@ void main() {
   }
   float fog = smoothstep(3800.0, 17500.0, distance(vPosition, uCamera));
   color = mix(color, vec3(0.69, 0.79, 0.79), fog * 0.92);
-  gl_FragColor = vec4(color, 1.0);
+  gl_FragColor = vec4(color, vAlpha);
 }`;
 
 function shader(gl, type, source) {
@@ -54,12 +58,12 @@ function program(gl) {
 }
 
 class Geometry {
-  constructor(){this.positions=[];this.normals=[];this.colors=[];}
-  tri(a,b,c,color,colors) {
+  constructor(){this.positions=[];this.normals=[];this.colors=[];this.alphas=[];}
+  tri(a,b,c,color,colors,alpha=1) {
     const n=normalize(cross(sub(b,a),sub(c,a)));
-    for(let i=0;i<3;i++){this.positions.push(...[a,b,c][i]);this.normals.push(...n);this.colors.push(...(colors?.[i] || color));}
+    for(let i=0;i<3;i++){this.positions.push(...[a,b,c][i]);this.normals.push(...n);this.colors.push(...(colors?.[i] || color));this.alphas.push(Array.isArray(alpha)?alpha[i]:alpha);}
   }
-  quad(a,b,c,d,color){this.tri(a,b,c,color);this.tri(a,c,d,color);}
+  quad(a,b,c,d,color,alpha=1){this.tri(a,b,c,color,null,alpha);this.tri(a,c,d,color,null,alpha);}
   box(x,y,z,w,h,d,color){
     const x0=x-w/2,x1=x+w/2,y0=y,y1=y+h,z0=z-d/2,z1=z+d/2;
     this.quad([x0,y1,z0],[x0,y1,z1],[x1,y1,z1],[x1,y1,z0],color);
@@ -69,9 +73,15 @@ class Geometry {
     this.quad([x1,y0,z0],[x1,y1,z0],[x1,y1,z1],[x1,y0,z1],color);
   }
 }
-function upload(gl,g){
-  const buffer=(data)=>{const b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(data),gl.STATIC_DRAW);return b;};
-  return {position:buffer(g.positions),normal:buffer(g.normals),color:buffer(g.colors),count:g.positions.length/3};
+function upload(gl,g,usage=gl.STATIC_DRAW){
+  const buffer=(data)=>{const b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(data),usage);return b;};
+  return {position:buffer(g.positions),normal:buffer(g.normals),color:buffer(g.colors),alpha:buffer(g.alphas),count:g.positions.length/3};
+}
+function replaceGeometry(gl,mesh,g){
+  for(const [buffer,data] of [[mesh.position,g.positions],[mesh.normal,g.normals],[mesh.color,g.colors],[mesh.alpha,g.alphas]]){
+    gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(data),gl.DYNAMIC_DRAW);
+  }
+  mesh.count=g.positions.length/3;
 }
 const colorForHeight=(h,x,z)=>{
   const v=0.94+0.06*Math.sin(x*.003+z*.002);
@@ -149,16 +159,51 @@ function makeJet(){
   g.tri([0,2.65,-6],[1.15,1.55,-2],[1.35,1.35,-8],glassLight);
   g.tri([-1.15,1.55,-2],[0,1.55,1],[0,2.65,-6],glass);
   g.tri([0,2.65,-6],[0,1.55,1],[1.15,1.55,-2],glassLight);
-  // Engine exhaust ring and a subtle warm exhaust flame.
+  // Engine exhaust ring. The animated flame is drawn separately.
   const center=[0,0,19.1];
   for(let i=0;i<20;i++){
     const a=i*Math.PI*2/20,b=(i+1)*Math.PI*2/20;
     const p=(r,t,z)=>[Math.cos(t)*r,Math.sin(t)*r,z];
     g.tri(center,p(1.5,a,19.15),p(1.5,b,19.15),[.18,.23,.23]);
     g.tri([0,0,19.3],p(.98,a,19.3),p(.98,b,19.3),[1,.59,.25]);
-    g.tri(p(.92,a,19.3),[0,0,24.5],p(.92,b,19.3),[.95,.50,.20]);
   }
   return g;
+}
+
+function makeFlame(s,time){
+  const g=new Geometry(),power=(clamp(s.throttle,.25,1)-.25)/.75;
+  const length=8+power*18+Math.sin(time*22)*1.4, radius=1.25+power*.8;
+  for(let i=0;i<16;i++){
+    const a=i*Math.PI*2/16,b=(i+1)*Math.PI*2/16;
+    const p=(r,t,z)=>[Math.cos(t)*r,Math.sin(t)*r,z];
+    g.tri(p(radius,a,19.4),[0,0,19.4+length],p(radius,b,19.4),[1,.42,.12],null,[.8,.08,.8]);
+    g.tri(p(radius*.55,a,19.6),[0,0,19.6+length*.7],p(radius*.55,b,19.6),[1,.88,.50],null,[.96,.12,.96]);
+  }
+  return g;
+}
+function disc(g,center,right,up,radius,color,opacity){
+  const point=t=>[center[0]+radius*(right[0]*Math.cos(t)+up[0]*Math.sin(t)),center[1]+radius*(right[1]*Math.cos(t)+up[1]*Math.sin(t)),center[2]+radius*(right[2]*Math.cos(t)+up[2]*Math.sin(t))];
+  for(let i=0;i<8;i++)g.tri(center,point(i*Math.PI/4),point((i+1)*Math.PI/4),color,null,[opacity,0,0]);
+}
+function makeWorldEffects(effects,s,eye,look,up){
+  const smoke=new Geometry(),shots=new Geometry();
+  if(!effects)return {smoke,shots};
+  const backwards=normalize(sub(eye,look)),right=normalize(cross(up,backwards)),cameraUp=cross(backwards,right);
+  for(const particle of effects.exhaust){
+    const fraction=particle.age/particle.life;
+    disc(smoke,[particle.x,particle.y,particle.z],right,cameraUp,2+fraction*9,[.76,.82,.80],.42*(1-fraction));
+  }
+  for(const bullet of effects.bullets){
+    const p=[bullet.x,bullet.y,bullet.z],direction=normalize([bullet.vx,bullet.vy,bullet.vz]);
+    const side=normalize(cross(direction,sub(eye,p))),width=2.4+Math.min(3,Math.hypot(...sub(eye,p))*.002),tail=p.map((v,i)=>v-direction[i]*48);
+    const point=(base,factor)=>base.map((v,i)=>v+side[i]*width*factor);
+    shots.quad(point(p,1),point(p,-1),point(tail,-.35),point(tail,.35),[1,.95,.55],1);
+  }
+  if(effects.flash>0){
+    const model=aircraftMatrix(s);
+    for(const side of [-1,1])disc(shots,transformPoint(model,[side*1.3,0,-20]),right,cameraUp,4.2,[1,.74,.29],.9);
+  }
+  return {smoke,shots};
 }
 
 export class FlightRenderer {
@@ -166,9 +211,10 @@ export class FlightRenderer {
     this.canvas=canvas; this.gl=canvas.getContext('webgl',{alpha:true,antialias:true,powerPreference:'high-performance'}) || canvas.getContext('experimental-webgl');
     if(!this.gl)throw new Error('WebGL unavailable');
     const gl=this.gl;this.program=program(gl);gl.useProgram(this.program);
-    this.attributes=Object.fromEntries(['aPosition','aNormal','aColor'].map(n=>[n,gl.getAttribLocation(this.program,n)]));
+    this.attributes=Object.fromEntries(['aPosition','aNormal','aColor','aAlpha'].map(n=>[n,gl.getAttribLocation(this.program,n)]));
     this.uniforms=Object.fromEntries(['uModel','uViewProjection','uCamera','uWater','uTime'].map(n=>[n,gl.getUniformLocation(this.program,n)]));
     this.sea=upload(gl,makeSea());this.terrain=upload(gl,makeTerrain());this.airport=upload(gl,makeAirport());this.clouds=upload(gl,makeClouds());this.jet=upload(gl,makeJet());
+    this.dynamic=upload(gl,new Geometry(),gl.DYNAMIC_DRAW);
     gl.enable(gl.DEPTH_TEST);gl.clearColor(0,0,0,0);this.camera=null;this.cameraMode='chase';
   }
   toggleCamera(){this.cameraMode=this.cameraMode==='chase'?'nose':'chase';this.camera=null;return this.cameraMode;}
@@ -178,23 +224,29 @@ export class FlightRenderer {
   }
   drawMesh(mesh,model,water=0){
     const gl=this.gl;
-    for(const [name,buffer] of [['aPosition',mesh.position],['aNormal',mesh.normal],['aColor',mesh.color]]){const loc=this.attributes[name];gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,3,gl.FLOAT,false,0,0);}
+    for(const [name,buffer,size] of [['aPosition',mesh.position,3],['aNormal',mesh.normal,3],['aColor',mesh.color,3],['aAlpha',mesh.alpha,1]]){const loc=this.attributes[name];gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,size,gl.FLOAT,false,0,0);}
     gl.uniformMatrix4fv(this.uniforms.uModel,false,model);gl.uniform1f(this.uniforms.uWater,water);gl.drawArrays(gl.TRIANGLES,0,mesh.count);
   }
-  render(s,dt,time){
+  render(s,dt,time,effects){
     this.resize();const gl=this.gl;gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
     const model=aircraftMatrix(s);
     const desired=this.cameraMode==='chase'?transformPoint(model,[0,19,72]):transformPoint(model,[0,3,-11]);
     // The chase camera rolls gently with the aircraft while preserving the horizon.
     const look=this.cameraMode==='chase'?transformPoint(model,[0,2,-28]):transformPoint(model,[0,2,-150]);
     if(!this.camera)this.camera=desired.slice();
-    const k=1-Math.exp(-clamp(dt,0,0.05)*5);for(let i=0;i<3;i++)this.camera[i]+=(desired[i]-this.camera[i])*k;
+    const k=1-Math.exp(-clamp(dt,0,0.25)*5);for(let i=0;i<3;i++)this.camera[i]+=(desired[i]-this.camera[i])*k;
     const up=this.cameraMode==='chase'?[Math.sin(-s.roll)*.25,1,0]:[model[4],model[5],model[6]];
     const projection=perspective((this.canvas.clientWidth<this.canvas.clientHeight?68:58)*Math.PI/180,this.canvas.width/this.canvas.height,.5,150000);
     gl.uniformMatrix4fv(this.uniforms.uViewProjection,false,multiply(projection,lookAt(this.camera,look,up)));
     gl.uniform3fv(this.uniforms.uCamera,this.camera);gl.uniform1f(this.uniforms.uTime,time);
     const world=identity();this.drawMesh(this.sea,world,1);this.drawMesh(this.terrain,world);this.drawMesh(this.airport,world);this.drawMesh(this.clouds,world);
     if(this.cameraMode==='chase')this.drawMesh(this.jet,model);
+    const fx=makeWorldEffects(effects,s,this.camera,look,up);
+    gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.depthMask(false);
+    replaceGeometry(gl,this.dynamic,fx.smoke);this.drawMesh(this.dynamic,world);
+    if(!s.crashed){replaceGeometry(gl,this.dynamic,makeFlame(s,time));this.drawMesh(this.dynamic,model);}
+    replaceGeometry(gl,this.dynamic,fx.shots);this.drawMesh(this.dynamic,world);
+    gl.depthMask(true);gl.disable(gl.BLEND);
   }
 }
 
@@ -208,7 +260,7 @@ export class SoftwareFlightRenderer {
     this.jet=makeJet();this.camera=null;this.cameraMode='chase';this.lastRender=-1;
   }
   toggleCamera(){this.cameraMode=this.cameraMode==='chase'?'nose':'chase';this.camera=null;return this.cameraMode;}
-  render(s,dt,time){
+  render(s,dt,time,effects){
     if(time-this.lastRender<1/30)return;this.lastRender=time;
     const canvas=this.canvas,ratio=Math.min(window.devicePixelRatio||1,1),w=Math.max(1,Math.floor(canvas.clientWidth*ratio)),h=Math.max(1,Math.floor(canvas.clientHeight*ratio));
     if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}
@@ -216,7 +268,7 @@ export class SoftwareFlightRenderer {
     const model=aircraftMatrix(s),desired=this.cameraMode==='chase'?transformPoint(model,[0,19,72]):transformPoint(model,[0,3,-11]);
     const look=this.cameraMode==='chase'?transformPoint(model,[0,2,-28]):transformPoint(model,[0,2,-150]);
     if(!this.camera)this.camera=desired.slice();
-    const smoothing=1-Math.exp(-clamp(dt,0,.05)*5);for(let i=0;i<3;i++)this.camera[i]+=(desired[i]-this.camera[i])*smoothing;
+    const smoothing=1-Math.exp(-clamp(dt,0,.25)*5);for(let i=0;i<3;i++)this.camera[i]+=(desired[i]-this.camera[i])*smoothing;
     const up=this.cameraMode==='chase'?[Math.sin(-s.roll)*.25,1,0]:[model[4],model[5],model[6]];
     const backwards=normalize(sub(this.camera,look)),right=normalize(cross(up,backwards)),cameraUp=cross(backwards,right),eye=this.camera;
     const focal=h/(2*Math.tan((canvas.clientWidth<canvas.clientHeight?68:58)*Math.PI/360));
@@ -232,7 +284,7 @@ export class SoftwareFlightRenderer {
     };
     const polygons=[];
     const collect=(geometry,transform)=>{
-      const p=geometry.positions,n=geometry.normals,c=geometry.colors;
+      const p=geometry.positions,n=geometry.normals,c=geometry.colors,alpha=geometry.alphas;
       for(let i=0;i<p.length;i+=9){
         const points=[];
         for(let j=0;j<9;j+=3){const v=transform?transformPoint(transform,[p[i+j],p[i+j+1],p[i+j+2]]):[p[i+j],p[i+j+1],p[i+j+2]];points.push(toCamera(...v));}
@@ -245,10 +297,12 @@ export class SoftwareFlightRenderer {
         const shade=.70+.30*Math.abs(nx*(-.34)+ny*.83+nz*.39),depth=clipped.reduce((sum,v)=>sum+v[2],0)/clipped.length;
         const fog=clamp((depth-3800)/(17500-3800),0,1)*.92;
         const rgb=[0,1,2].map((j)=>Math.round(255*clamp(((c[i+j]+c[i+3+j]+c[i+6+j])/3)*shade*(1-fog)+[.69,.79,.79][j]*fog,0,1)));
-        polygons.push({points:projected,depth,color:`rgb(${rgb.join(',')})`});
+        const opacity=(alpha[i/3]+alpha[i/3+1]+alpha[i/3+2])/3;
+        polygons.push({points:projected,depth,color:`rgba(${rgb.join(',')},${opacity})`});
       }
     };
     for(const mesh of this.scene)collect(mesh,null);if(this.cameraMode==='chase')collect(this.jet,model);
+    const fx=makeWorldEffects(effects,s,eye,look,up);collect(fx.smoke,null);collect(fx.shots,null);if(!s.crashed)collect(makeFlame(s,time),model);
     polygons.sort((a,b)=>b.depth-a.depth);
     for(const poly of polygons){ctx.fillStyle=poly.color;ctx.beginPath();ctx.moveTo(...poly.points[0]);for(let j=1;j<poly.points.length;j++)ctx.lineTo(...poly.points[j]);ctx.closePath();ctx.fill();}
   }

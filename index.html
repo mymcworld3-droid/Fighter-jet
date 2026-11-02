@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#101d2a">
   <meta name="description" content="駕駛戰機飛越海島的 3D 飛行模擬器。">
   <title>SKYWARD | 3D 戰鬥機模擬器</title>
@@ -32,6 +32,7 @@
     </section>
 
     <div class="reticle" aria-hidden="true"><span class="reticle-wing left"></span><span class="reticle-circle"></span><span class="reticle-wing right"></span><span class="reticle-stem"></span></div>
+    <div id="fire-hud" class="fire-hud" aria-hidden="true"><i style="--lane:-20px;--delay:0s"></i><i style="--lane:20px;--delay:.08s"></i><i style="--lane:-13px;--delay:.16s"></i><i style="--lane:13px;--delay:.24s"></i></div>
 
     <div class="scene-caption"><span class="caption-line"></span><div><strong>OPEN SKY</strong><small>自由探索這片天空</small></div></div>
 
@@ -50,16 +51,21 @@
 
       <div class="right-controls">
         <div class="control-heading align-right"><span>02 / ENGINE POWER</span><strong>引擎推力</strong></div>
-        <div class="throttle-card">
-          <div class="throttle-top"><span>THROTTLE</span><strong id="throttle-value">65<small>%</small></strong></div>
-          <div class="throttle-input"><span>−</span><input id="throttle" type="range" min="25" max="100" value="65" aria-label="引擎推力"><span>＋</span></div>
+        <div class="engine-controls">
+          <div class="lever-panel">
+            <div class="lever-readout"><span>THR</span><strong id="throttle-value">65<small>%</small></strong></div>
+            <div id="throttle" class="throttle-lever" role="slider" tabindex="0" aria-label="引擎推力拉桿" aria-valuemin="25" aria-valuemax="100" aria-valuenow="65" aria-valuetext="65%" aria-orientation="vertical">
+              <span class="lever-scale" aria-hidden="true"></span><span class="lever-track" aria-hidden="true"><span class="lever-fill"></span><span class="lever-handle"><i></i><i></i><i></i></span></span>
+            </div>
+          </div>
+          <div class="weapon-panel"><span class="weapon-label">M61 / <b id="shots-fired">0</b> 發</span><button id="fire-button" class="fire-button" type="button" aria-label="按住射擊" aria-pressed="false"><span class="fire-crosshair" aria-hidden="true"></span><strong>FIRE</strong><small>按住射擊</small></button></div>
         </div>
         <div class="action-row"><button id="camera-button" type="button" aria-label="切換視角">◉ <span>切換視角</span></button><button id="reset-button" type="button" aria-label="重新開始飛行">↻ <span>重新開始</span></button></div>
       </div>
     </section>
 
-    <div class="keyboard-hint">鍵盤 <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 或方向鍵飛行 <span>·</span> <kbd>V</kbd> 切換視角</div>
-    <div id="message" class="message" role="status" aria-live="polite">向上推搖桿抬高機頭，左右推動即可轉彎</div>
+    <div class="keyboard-hint">鍵盤 <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 飛行 <span>·</span> <kbd>SPACE</kbd> 射擊 <span>·</span> <kbd>V</kbd> 切換視角</div>
+    <div id="message" class="message" role="status" aria-live="polite">左手駕駛，右手調整推力或按住射擊</div>
 
     <div id="end-screen" class="end-screen" hidden>
       <div class="end-card"><span class="eyebrow">FLIGHT ENDED</span><h1>飛行結束</h1><p>戰機碰到地面或海面了。調整機頭，再試一次！</p><button id="restart-button" type="button">重新起飛 <span>↗</span></button></div>
