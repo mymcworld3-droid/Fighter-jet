@@ -6,6 +6,7 @@ import { FLIGHT_GATES } from './course.js';
 import { terrainOutsideRectangle } from './terrain-geometry.js';
 import { WHEEL, COASTER_SEGMENTS, coasterTrack, wheelAngle } from './attractions.js';
 import { WRECK_PARTS } from './crash-effects.js';
+import { TUNNELS, TUNNEL_SEGMENTS, TUNNEL_SIDES } from './tunnels.js';
 
 const VERTEX = `
 attribute vec3 aPosition;
@@ -174,10 +175,20 @@ function makeAttractions(){
     if(i%4===0)beam(g,[a[0],y+2,a[2]],a,7,[.63,.68,.61]);
   }
   for(const gate of FLIGHT_GATES)ring(g,gate.x,gate.y,gate.z,gate.radius,16,[.28,.87,.78],32);
-  for(const [bx,by,bz,color] of [[-850,750,-2300,[.93,.59,.37]],[2100,1050,-4200,[.48,.78,.76]],[-2900,1050,-4700,[.85,.69,.42]]]){
+  for(const [bx,by,bz,color] of [[-1650,800,-2650,[.93,.59,.37]],[2100,1050,-4200,[.48,.78,.76]],[-2900,1050,-4700,[.85,.69,.42]]]){
     sphere(g,bx,by,bz,85,105,85,color,5,8);
     g.box(bx,by-155,bz,37,30,37,[.55,.40,.28]);
     for(const dx of [-15,15])beam(g,[bx+dx,by-125,bz],[bx+dx*2,by-80,bz],3,[.83,.82,.69]);
+  }
+  return g;
+}
+function makeTunnels(){
+  const g=new Geometry();
+  for(const tunnel of TUNNELS)for(let i=0;i<TUNNEL_SEGMENTS;i++)for(let j=0;j<TUNNEL_SIDES;j++){
+    const next=(j+1)%TUNNEL_SIDES,edge=i===0||i===TUNNEL_SEGMENTS-1,lightBand=i%4===0;
+    const factor=edge?(j%2?1.18:1.42):lightBand?(j%2?1.10:1.25):(j%3===0?.72:.88);
+    const color=tunnel.color.map(n=>clamp(n*factor,0,1));
+    g.quad(tunnel.rings[i][j],tunnel.rings[i][next],tunnel.rings[i+1][next],tunnel.rings[i+1][j],color);
   }
   return g;
 }
@@ -365,7 +376,7 @@ export class FlightRenderer {
     const gl=this.gl;this.program=program(gl);gl.useProgram(this.program);
     this.attributes=Object.fromEntries(['aPosition','aNormal','aColor','aAlpha'].map(n=>[n,gl.getAttribLocation(this.program,n)]));
     this.uniforms=Object.fromEntries(['uModel','uViewProjection','uCamera'].map(n=>[n,gl.getUniformLocation(this.program,n)]));
-    this.sea=upload(gl,makeSea());this.terrain=upload(gl,makeTerrain());this.airport=upload(gl,makeAirport());this.attractions=upload(gl,makeAttractions());this.wheel=upload(gl,makeFerrisWheel());this.clouds=upload(gl,makeClouds());
+    this.sea=upload(gl,makeSea());this.terrain=upload(gl,makeTerrain());this.airport=upload(gl,makeAirport());this.attractions=upload(gl,makeAttractions());this.tunnels=upload(gl,makeTunnels());this.wheel=upload(gl,makeFerrisWheel());this.clouds=upload(gl,makeClouds());
     const jet=makeJet();this.jet=upload(gl,jet);this.wreck=Object.fromEntries(Object.entries(splitJet(jet)).map(([id,geometry])=>[id,upload(gl,geometry)]));this.gear=upload(gl,makeLandingGear());
     this.dynamic=upload(gl,new Geometry(),gl.DYNAMIC_DRAW);
     gl.enable(gl.DEPTH_TEST);gl.clearColor(0,0,0,0);this.camera=null;this.cameraMode='chase';
@@ -402,7 +413,7 @@ export class FlightRenderer {
     gl.uniform3fv(this.uniforms.uCamera,this.camera);
     const world=identity(),seaModel=identity();seaModel[12]=this.camera[0];seaModel[14]=this.camera[2];
     gl.enable(gl.POLYGON_OFFSET_FILL);gl.polygonOffset(1,2);this.drawMesh(this.sea,seaModel);gl.disable(gl.POLYGON_OFFSET_FILL);
-    this.drawMesh(this.terrain,world);this.drawMesh(this.airport,world);this.drawMesh(this.attractions,world);this.drawMesh(this.wheel,ferrisMatrix(time));this.drawMesh(this.clouds,world);
+    this.drawMesh(this.terrain,world);this.drawMesh(this.airport,world);this.drawMesh(this.attractions,world);this.drawMesh(this.tunnels,world);this.drawMesh(this.wheel,ferrisMatrix(time));this.drawMesh(this.clouds,world);
     if(crash){for(const part of crash.pieces)this.drawMesh(this.wreck[part.id],aircraftMatrix(part));}
     else if(this.cameraMode==='chase'){this.drawMesh(this.jet,model);if(s.gearPosition>.01)this.drawMesh(this.gear,landingGearMatrix(model,s.gearPosition));}
     for(const peer of peers){
@@ -433,7 +444,7 @@ export class SoftwareFlightRenderer {
   constructor(canvas){
     this.canvas=canvas;this.ctx=canvas.getContext('2d',{alpha:true});
     if(!this.ctx)throw new Error('Canvas unavailable');
-    this.scene=[makeTerrain(CANVAS_TERRAIN_STEPS),makeAirport(),makeAttractions(),makeClouds(8,3,5)];this.wheel=makeFerrisWheel();
+    this.scene=[makeTerrain(CANVAS_TERRAIN_STEPS),makeAirport(),makeAttractions(),makeTunnels(),makeClouds(8,3,5)];this.wheel=makeFerrisWheel();
     this.jet=makeJet();this.wreck=splitJet(this.jet);this.gear=makeLandingGear();this.camera=null;this.cameraMode='chase';this.lastRender=-1;
   }
   toggleCamera(){this.cameraMode=this.cameraMode==='chase'?'nose':'chase';this.camera=null;return this.cameraMode;}

@@ -1,4 +1,4 @@
-import { clamp, createFlight, updateFlight, setLandingGear, LANDING_SPEED_LIMIT } from './flight.js';
+import { clamp, createFlight, updateFlight, setLandingGear } from './flight.js';
 import { bindPointerControl, leverValue } from './controls.js';
 import { createEffects, updateEffects, registerImpact } from './effects.js';
 import { FlightRenderer, SoftwareFlightRenderer } from './renderer.js';
@@ -9,6 +9,7 @@ import { installZoomGuard } from './touch-zoom.js';
 import { attractionHit } from './attractions.js';
 import { createCrashEffect, updateCrashEffect } from './crash-effects.js';
 import { impactResponse, applyImpact } from './impact.js';
+import { TUNNELS } from './tunnels.js';
 
 const $ = id => document.getElementById(id);
 const canvas=$('world'), joystick=$('joystick'), knob=$('stick-knob'), throttle=$('throttle'), fireButton=$('fire-button');
@@ -65,7 +66,7 @@ if(renderer){
   function toggleGear(){
     const down=!flight.gearDown;
     if(!setLandingGear(flight,down)){if(flight.onGround)message('離地後才能收起起落架');return;}
-    updateGearButton();message(down?`起落架放下中；速度低於 ${Math.round(LANDING_SPEED_LIMIT*3.6)} km/h，機身貼合地面並平緩下降`:'起落架收起中',5000);
+    updateGearButton();message(down?'起落架放下中；對準地形、保持機身平穩即可降落':'起落架收起中',5000);
   }
   $('gear-button').addEventListener('click',toggleGear);
   const fireControl=bindPointerControl(fireButton,{canStart:()=>!flight.crashed,start:()=>{pendingShot=true;updateFireButton();},end:updateFireButton});
@@ -171,10 +172,17 @@ if(renderer){
   $('map-button').addEventListener('click',()=>{releaseControls();mapModal.hidden=false;updateMap();$('map-close').focus();});
   $('map-close').addEventListener('click',closeMap);
   mapModal.addEventListener('click',e=>{if(e.target===mapModal)closeMap();});
+  const svgNS='http://www.w3.org/2000/svg',mapTunnels=$('map-tunnels');
+  for(const tunnel of TUNNELS){
+    const path=document.createElementNS(svgNS,'path');
+    path.setAttribute('d',tunnel.centers.map((p,i)=>`${i?'L':'M'} ${(p[0]+9000)/18} ${(p[2]+9000)/18}`).join(' '));
+    path.setAttribute('stroke',`rgb(${tunnel.color.map(n=>Math.round(n*255)).join(',')})`);
+    const title=document.createElementNS(svgNS,'title');title.textContent=tunnel.name;path.appendChild(title);mapTunnels.appendChild(path);
+  }
   function updateMap(){
     const x=(flight.x+9000)/18000*1000,z=(flight.z+9000)/18000*1000;
     $('map-plane').setAttribute('transform',`translate(${clamp(x,28,972)} ${clamp(z,28,972)}) rotate(${flight.yaw*180/Math.PI})`);
-    $('map-status').textContent=(x<0||x>1000||z<0||z>1000)?'目前已飛出地圖範圍，圖示顯示最近的邊界。':'青色圓點是飛行環，金色圓點是遊樂園。';
+    $('map-status').textContent=(x<0||x>1000||z<0||z>1000)?'目前已飛出地圖範圍，圖示顯示最近的邊界。':'青色圓點是飛行環，金色圓點是遊樂園；彩色曲線是空中隧道（約 600–1,350 公尺高）。';
   }
   window.addEventListener('blur',releaseControls);
   document.addEventListener('visibilitychange',()=>{if(document.hidden)releaseControls();lastTime=0;});
@@ -231,7 +239,7 @@ if(renderer){
     }
     if(wasFlying&&flight.crashed){
       releaseControls();$('flight-status').textContent='飛行結束';
-      $('crash-detail').textContent=flight.crashReason==='attraction'?`戰機撞上${flight.hitAttraction==='wheel'?'摩天輪':'雲霄飛車'}了。`:flight.crashReason==='water'?'戰機碰到海面了；請選擇陸地降落。':flight.crashReason==='gear'?'接地前請先放下起落架，並等輪子完全放下。':'接地時速度、下降速度或與地面的夾角過大，請貼合地形並平緩下降。';
+      $('crash-detail').textContent=flight.crashReason==='attraction'?`戰機撞上${{wheel:'摩天輪',coaster:'雲霄飛車',tunnel:'空中隧道'}[flight.hitAttraction]||'障礙物'}了。`:flight.crashReason==='water'?'戰機碰到海面了；請選擇陸地降落。':flight.crashReason==='gear'?'接地前請先放下起落架，並等輪子完全放下。':'接地時機身與地面的夾角過大，請對準地形再降落。';
       message('戰機受損！',2000);
     }else if(!wasOnGround&&flight.onGround){$('flight-status').textContent='已落地';message('平穩落地！加速並抬高機頭可再次起飛',5000);}
     else if(wasOnGround&&!flight.onGround){$('flight-status').textContent='飛行中';message('已起飛，可收起起落架',3500);}

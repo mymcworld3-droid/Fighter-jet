@@ -1,5 +1,6 @@
 import { PARK, clamp } from './flight.js';
 import { aircraftMatrix, transformPoint } from './math.js';
+import { tunnelMayIntersect, tunnelHit } from './tunnels.js';
 
 // The visual models and their collision shapes share these dimensions.
 export const WHEEL={x:PARK.x-180,y:PARK.ground+230,z:PARK.z-90,radius:165};
@@ -62,12 +63,15 @@ function overlapsSweep(from,to,a,b,padding){
 }
 export function attractionHit(previous,current,time=0,dt=.025){
   const from=[previous.x,previous.y,previous.z],to=[current.x,current.y,current.z];
-  if(!overlapsSweep(from,to,[PARK.x-400,PARK.ground,PARK.z-400],[PARK.x+510,WHEEL.y+180,PARK.z+350],36))return null;
+  const nearPark=overlapsSweep(from,to,[PARK.x-400,PARK.ground,PARK.z-400],[PARK.x+510,WHEEL.y+180,PARK.z+350],36);
+  const nearTunnel=tunnelMayIntersect(from,to);
+  if(!nearPark&&!nearTunnel)return null;
   const oldModel=aircraftMatrix(previous),newModel=aircraftMatrix(current);
   const paths=aircraftPoints.map(([position,radius,part])=>({from:transformPoint(oldModel,position),to:transformPoint(newModel,position),radius,part}));
+  let best=nearTunnel?tunnelHit(from,to,paths):null;
+  if(!nearPark)return best;
   const nearWheel=overlapsSweep(from,to,[WHEEL.x-190,PARK.ground,WHEEL.z-30],[WHEEL.x+190,WHEEL.y+190,WHEEL.z+30],36);
   const colliders=nearWheel?fixed.concat(wheelColliders(time-dt/2)):fixed;
-  let best=null;
   for(const c of colliders){
     if(!overlapsSweep(from,to,c.a,c.b,32+c.radius))continue;
     for(const p of paths){

@@ -79,7 +79,7 @@
         <button id="map-close" class="room-close" type="button" aria-label="關閉地圖">×</button>
         <span class="eyebrow">EXPLORE / 自由探索</span><h1 id="map-title">飛行地圖</h1>
         <p class="room-description">北方在上方；飛機圖示顯示目前位置與航向。開啟地圖時飛行會繼續。</p>
-        <svg class="world-map" viewBox="0 0 1000 1000" role="img" aria-label="群島飛行地圖，包含機場、樂園、沙漠峽谷、雪山與火山島">
+        <svg class="world-map" viewBox="0 0 1000 1000" role="img" aria-label="群島飛行地圖，包含機場、樂園、空中隧道、沙漠峽谷、雪山與火山島">
           <rect x="0" y="0" width="1000" height="1000" rx="30" fill="#174751"/>
           <g fill="none" stroke="#a9d5cb" opacity=".12" stroke-width="2"><path d="M0 250H1000 M0 500H1000 M0 750H1000 M250 0V1000 M500 0V1000 M750 0V1000"/></g>
           <g fill="#749486" stroke="#aac5b4" stroke-width="5" opacity=".9">
@@ -92,10 +92,11 @@
           </g>
           <circle cx="569" cy="381" r="12" fill="#f1c778" stroke="#123e43" stroke-width="5"/>
           <g fill="#a5fff0" stroke="#123e43" stroke-width="5"><circle cx="500" cy="480" r="10"/><circle cx="500" cy="419" r="8"/><circle cx="500" cy="358" r="8"/><circle cx="500" cy="297" r="8"/></g>
+          <g id="map-tunnels" fill="none" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
           <g id="map-plane" transform="translate(500 558)"><circle r="25" fill="#0d3440" stroke="#e8fff5" stroke-width="5"/><path d="M0 -19 L12 14 L0 8 L-12 14 Z" fill="#e8fff5"/></g>
           <text x="938" y="67" fill="#e4fbf3" font-family="system-ui, sans-serif" font-size="36" text-anchor="middle">N ↑</text>
         </svg>
-        <p id="map-status" class="map-status">青色圓點是飛行環，金色圓點是遊樂園。</p>
+        <p id="map-status" class="map-status">青色圓點是飛行環，金色圓點是遊樂園；彩色曲線是空中隧道（約 600–1,350 公尺高）。</p>
       </section>
     </div>
     <div id="multiplayer-modal" class="room-modal" hidden>

@@ -14,11 +14,27 @@ test('lowering the gear takes time and a steady approach touches down',()=>{
   assert.equal(setLandingGear(landing,false),false);assert(landing.gearDown);
 });
 
-test('touchdown rejects raised or moving gear, excessive attitude, speed and sinking',()=>{
-  for(const opts of [{gearDown:false,gearPosition:0},{gearPosition:.4},{roll:.8},{speed:190},{pitch:-.26,speed:145}]){
+test('touchdown rejects raised or moving gear and excessive terrain-relative attitude',()=>{
+  for(const opts of [{gearDown:false,gearPosition:0},{gearPosition:.4},{roll:.8},{pitch:-.4,speed:300}]){
     const plane=approach(opts);plane.y=35.05;updateFlight(plane,{x:0,y:0},.05,ground);assert(plane.crashed,JSON.stringify(opts));assert(!plane.onGround);
   }
   const water=approach({y:8.1});updateFlight(water,{x:0,y:0},.05,()=>0);assert(water.crashed);assert.equal(water.crashReason,'water');
+});
+
+test('a shallow approach lands at high speed even with a high absolute descent rate',()=>{
+  for(const speed of [190,300,500]){
+    const plane=approach({y:35.05,speed,pitch:-.12});
+    updateFlight(plane,{x:0,y:0},.05,ground);
+    assert(plane.onGround&&!plane.crashed,`speed ${speed}`);
+    assert(plane.speed>180,'touchdown retains forward speed');
+  }
+});
+
+test('high-speed touchdown still uses the local terrain angle',()=>{
+  const uphill=(x,z)=>100-.6*z,normal=surfaceNormal(uphill,0,0);
+  const plane=approach({x:0,z:0,y:100+groundClearance(normal)+.05,speed:300,pitch:Math.atan(.6)-.03,roll:0});
+  updateFlight(plane,{x:0,y:0},.05,uphill);
+  assert(plane.onGround&&!plane.crashed);
 });
 
 test('a landed plane rolls to a stop and can accelerate and take off again',()=>{

@@ -15,7 +15,7 @@ export const ISLANDS = [
 ];
 export const PARK = {x:1250,z:-2150,ground:75};
 export const TERRAIN_SIZE=18000, WEBGL_TERRAIN_STEPS=150, CANVAS_TERRAIN_STEPS=44;
-export const LANDING_SPEED_LIMIT=150, LANDING_SINK_LIMIT=30, LANDING_GEAR_CLEARANCE=8;
+export const LANDING_GEAR_CLEARANCE=8;
 export const LANDING_ROLL_LIMIT=.35, LANDING_PITCH_MIN=-.28, LANDING_PITCH_MAX=.30;
 
 export function terrainHeight(x, z) {
@@ -122,7 +122,6 @@ export function updateFlight(state, input, elapsed, groundHeight=terrainHeight,g
     return state;
   }
 
-  const oldX=state.x,oldY=state.y,oldZ=state.z;
   state.pitchRate += (y * 0.45 - state.pitchRate) * (1 - Math.exp(-4.5 * dt));
   state.pitch = clamp(state.pitch + state.pitchRate * dt, -0.68, 0.68);
   // Full stick permits an approximately 85° bank while keeping pitch and yaw controllable.
@@ -144,10 +143,10 @@ export function updateFlight(state, input, elapsed, groundHeight=terrainHeight,g
   const normal=ground>.25?(groundNormal?groundNormal(state.x,state.z):surfaceNormal(groundHeight,state.x,state.z)):[0,1,0];
   const clearance=groundClearance(normal);
   if(state.y<=Math.max(0,ground)+clearance){
-    const previousGround=Math.max(0,groundHeight(oldX,oldZ));
-    const sink=dt>0?Math.max(0,(oldY-state.y+ground-previousGround)/dt):0;
     const angles=relativeGroundAngles(state,normal);
-    const safe=ground>.25&&state.gearDown&&state.gearPosition>=.95&&state.speed<=LANDING_SPEED_LIMIT&&sink<=LANDING_SINK_LIMIT&&
+    // Landing is deliberately forgiving: attitude is measured against the
+    // local surface, with no speed-dependent impact threshold.
+    const safe=ground>.25&&state.gearDown&&state.gearPosition>=.95&&
       Math.abs(angles.roll)<=LANDING_ROLL_LIMIT&&angles.pitch>=LANDING_PITCH_MIN&&angles.pitch<=LANDING_PITCH_MAX;
     if(safe){state.y=ground+clearance;state.groundClearance=clearance;state.onGround=true;state.groundTime=0;state.pitchRate=0;}
     else {state.crashed=true;state.crashReason=ground<=.25?'water':!state.gearDown||state.gearPosition<.95?'gear':'landing';}
