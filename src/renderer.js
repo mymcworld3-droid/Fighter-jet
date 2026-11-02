@@ -1,6 +1,7 @@
 import { terrainHeight, clamp } from './flight.js';
 import { identity, perspective, lookAt, multiply, aircraftMatrix, transformPoint, normalize, cross, sub } from './math.js';
 import { cameraFov, chaseCameraOffset, cameraDamping } from './speed-effects.js';
+import { SEA_LEVEL, keepCameraAboveSea, clipTerrainAboveSea, horizonLine, oceanScreenGeometry } from './ocean.js';
 
 const VERTEX = `
 attribute vec3 aPosition;
@@ -32,16 +33,10 @@ varying vec3 vNormal;
 varying vec3 vColor;
 varying float vAlpha;
 uniform vec3 uCamera;
-uniform float uWater;
-uniform float uTime;
 void main() {
   vec3 light = normalize(vec3(-0.35, 0.85, 0.4));
   float shade = 0.70 + 0.30 * abs(dot(normalize(vNormal), light));
   vec3 color = vColor * shade;
-  if (uWater > 0.5) {
-    float waves = sin(vPosition.x * 0.006 + uTime * 0.3) * sin(vPosition.z * 0.008 - uTime * 0.22);
-    color += vec3(0.018, 0.038, 0.043) * waves;
-  }
   float fog = smoothstep(3800.0, 17500.0, distance(vPosition, uCamera));
   color = mix(color, vec3(0.69, 0.79, 0.79), fog * 0.92);
   gl_FragColor = vec4(color, vAlpha);
@@ -98,7 +93,10 @@ function makeTerrain(steps=150){
     const x=start+ix*step,z=start+iz*step;
     const a=[x,terrainHeight(x,z),z], b=[x,terrainHeight(x,z+step),z+step], c=[x+step,terrainHeight(x+step,z+step),z+step], d=[x+step,terrainHeight(x+step,z),z];
     const ca=colorForHeight(a[1],a[0],a[2]),cb=colorForHeight(b[1],b[0],b[2]),cc=colorForHeight(c[1],c[0],c[2]),cd=colorForHeight(d[1],d[0],d[2]);
-    g.tri(a,b,c,null,[ca,cb,cc]);g.tri(a,c,d,null,[ca,cc,cd]);
+    for(const vertices of [[{position:a,color:ca},{position:b,color:cb},{position:c,color:cc}],[{position:a,color:ca},{position:c,color:cc},{position:d,color:cd}]]){
+      const land=clipTerrainAboveSea(vertices);
+      for(let j=1;j<land.length-1;j++)g.tri(land[0].position,land[j].position,land[j+1].position,null,[land[0].color,land[j].color,land[j+1].color]);
+    }
   }
   return g;
 }
@@ -114,7 +112,7 @@ function makeAirport(){
   g.box(330,terrainHeight(330,-880)+85,-880,60,22,60,[.25,.34,.36]);
   return g;
 }
-function makeSea(){const g=new Geometry();flatRect(g,-100000,-100000,100000,100000,-1,[.20,.43,.49]);return g;}
+function makeSea(){const g=new Geometry();flatRect(g,-160000,-160000,160000,160000,SEA_LEVEL,[.20,.43,.49]);return g;}
 function sphere(g,cx,cy,cz,rx,ry,rz,color,rows=5,cols=8){
   const p=(a,b)=>[cx+rx*Math.sin(a)*Math.cos(b),cy+ry*Math.cos(a),cz+rz*Math.sin(a)*Math.sin(b)];
   for(let i=0;i<rows;i++)for(let j=0;j<cols;j++){
@@ -228,7 +226,7 @@ export class FlightRenderer {
     if(!this.gl)throw new Error('WebGL unavailable');
     const gl=this.gl;this.program=program(gl);gl.useProgram(this.program);
     this.attributes=Object.fromEntries(['aPosition','aNormal','aColor','aAlpha'].map(n=>[n,gl.getAttribLocation(this.program,n)]));
-    this.uniforms=Object.fromEntries(['uModel','uViewProjection','uCamera','uWater','uTime'].map(n=>[n,gl.getUniformLocation(this.program,n)]));
+    this.uniforms=Object.fromEntries(['uModel','uViewProjection','uCamera'].map(n=>[n,gl.getUniformLocation(this.program,n)]));
     this.sea=upload(gl,makeSea());this.terrain=upload(gl,makeTerrain());this.airport=upload(gl,makeAirport());this.clouds=upload(gl,makeClouds());this.jet=upload(gl,makeJet());
     this.dynamic=upload(gl,new Geometry(),gl.DYNAMIC_DRAW);
     gl.enable(gl.DEPTH_TEST);gl.clearColor(0,0,0,0);this.camera=null;this.cameraMode='chase';
@@ -239,25 +237,31 @@ export class FlightRenderer {
     const ratio=Math.min(window.devicePixelRatio || 1,1.5),w=Math.max(1,Math.floor(this.canvas.clientWidth*ratio)),h=Math.max(1,Math.floor(this.canvas.clientHeight*ratio));
     if(this.canvas.width!==w||this.canvas.height!==h){this.canvas.width=w;this.canvas.height=h;this.gl.viewport(0,0,w,h);}
   }
-  drawMesh(mesh,model,water=0){
+  drawMesh(mesh,model){
     const gl=this.gl;
     for(const [name,buffer,size] of [['aPosition',mesh.position,3],['aNormal',mesh.normal,3],['aColor',mesh.color,3],['aAlpha',mesh.alpha,1]]){const loc=this.attributes[name];gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,size,gl.FLOAT,false,0,0);}
-    gl.uniformMatrix4fv(this.uniforms.uModel,false,model);gl.uniform1f(this.uniforms.uWater,water);gl.drawArrays(gl.TRIANGLES,0,mesh.count);
+    gl.uniformMatrix4fv(this.uniforms.uModel,false,model);gl.drawArrays(gl.TRIANGLES,0,mesh.count);
   }
   render(s,dt,time,effects,peers=[]){
     this.resize();const gl=this.gl;gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
     const model=aircraftMatrix(s);
-    const desired=this.cameraMode==='chase'?transformPoint(model,chaseCameraOffset(s.speed)):transformPoint(model,[0,3,-11]);
+    const desired=keepCameraAboveSea(this.cameraMode==='chase'?transformPoint(model,chaseCameraOffset(s.speed)):transformPoint(model,[0,3,-11]));
     // The chase camera rolls gently with the aircraft while preserving the horizon.
     const look=this.cameraMode==='chase'?transformPoint(model,[0,2,-28]):transformPoint(model,[0,2,-150]);
     if(!this.camera)this.camera=desired.slice();
     const k=cameraDamping(dt,s.speed,this.cameraMode==='chase');for(let i=0;i<3;i++)this.camera[i]+=(desired[i]-this.camera[i])*k;
+    keepCameraAboveSea(this.camera);
     const up=this.cameraMode==='chase'?[Math.sin(-s.roll)*.25,1,0]:[model[4],model[5],model[6]];
-    const projection=perspective(cameraFov(s.speed,this.canvas.clientWidth<this.canvas.clientHeight)*Math.PI/180,this.canvas.width/this.canvas.height,.5,150000);
+    const fov=cameraFov(s.speed,this.canvas.clientWidth<this.canvas.clientHeight)*Math.PI/180;
+    const projection=perspective(fov,this.canvas.width/this.canvas.height,.5,150000);
+    const backwards=normalize(sub(this.camera,look)),right=normalize(cross(up,backwards)),cameraUp=cross(backwards,right);
+    this.oceanHorizon=horizonLine(right,cameraUp,backwards,this.canvas.width,this.canvas.height,this.canvas.height/(2*Math.tan(fov/2)));
     this.viewProjection=multiply(projection,lookAt(this.camera,look,up));
     gl.uniformMatrix4fv(this.uniforms.uViewProjection,false,this.viewProjection);
-    gl.uniform3fv(this.uniforms.uCamera,this.camera);gl.uniform1f(this.uniforms.uTime,time);
-    const world=identity();this.drawMesh(this.sea,world,1);this.drawMesh(this.terrain,world);this.drawMesh(this.airport,world);this.drawMesh(this.clouds,world);
+    gl.uniform3fv(this.uniforms.uCamera,this.camera);
+    const world=identity(),seaModel=identity();seaModel[12]=this.camera[0];seaModel[14]=this.camera[2];
+    gl.enable(gl.POLYGON_OFFSET_FILL);gl.polygonOffset(1,2);this.drawMesh(this.sea,seaModel);gl.disable(gl.POLYGON_OFFSET_FILL);
+    this.drawMesh(this.terrain,world);this.drawMesh(this.airport,world);this.drawMesh(this.clouds,world);
     if(this.cameraMode==='chase')this.drawMesh(this.jet,model);
     for(const peer of peers)this.drawMesh(this.jet,aircraftMatrix(peer.flight));
     const fx=makeWorldEffects(effects,s,this.camera,look,up);
@@ -281,7 +285,7 @@ export class SoftwareFlightRenderer {
   constructor(canvas){
     this.canvas=canvas;this.ctx=canvas.getContext('2d',{alpha:true});
     if(!this.ctx)throw new Error('Canvas unavailable');
-    this.scene=[makeSea(),makeTerrain(34),makeAirport(),makeClouds(8,3,5)];
+    this.scene=[makeTerrain(34),makeAirport(),makeClouds(8,3,5)];
     this.jet=makeJet();this.camera=null;this.cameraMode='chase';this.lastRender=-1;
   }
   toggleCamera(){this.cameraMode=this.cameraMode==='chase'?'nose':'chase';this.camera=null;return this.cameraMode;}
@@ -292,13 +296,20 @@ export class SoftwareFlightRenderer {
     const canvas=this.canvas,ratio=Math.min(window.devicePixelRatio||1,1),w=Math.max(1,Math.floor(canvas.clientWidth*ratio)),h=Math.max(1,Math.floor(canvas.clientHeight*ratio));
     if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}
     const ctx=this.ctx;ctx.clearRect(0,0,w,h);
-    const model=aircraftMatrix(s),desired=this.cameraMode==='chase'?transformPoint(model,chaseCameraOffset(s.speed)):transformPoint(model,[0,3,-11]);
+    const model=aircraftMatrix(s),desired=keepCameraAboveSea(this.cameraMode==='chase'?transformPoint(model,chaseCameraOffset(s.speed)):transformPoint(model,[0,3,-11]));
     const look=this.cameraMode==='chase'?transformPoint(model,[0,2,-28]):transformPoint(model,[0,2,-150]);
     if(!this.camera)this.camera=desired.slice();
     const smoothing=cameraDamping(renderDt,s.speed,this.cameraMode==='chase');for(let i=0;i<3;i++)this.camera[i]+=(desired[i]-this.camera[i])*smoothing;
+    keepCameraAboveSea(this.camera);
     const up=this.cameraMode==='chase'?[Math.sin(-s.roll)*.25,1,0]:[model[4],model[5],model[6]];
     const backwards=normalize(sub(this.camera,look)),right=normalize(cross(up,backwards)),cameraUp=cross(backwards,right),eye=this.camera;
     const focal=h/(2*Math.tan(cameraFov(s.speed,canvas.clientWidth<canvas.clientHeight)*Math.PI/360));
+    const ocean=oceanScreenGeometry({width:w,height:h,right,up:cameraUp,backwards,focal,eyeY:eye[1]});this.oceanHorizon=ocean.horizon;
+    if(ocean.points.length>=3){
+      let fill='#356d79';
+      if(ocean.gradient){const p=ocean.gradient,gradient=ctx.createLinearGradient(p.x,p.y,p.x2,p.y2);gradient.addColorStop(0,'#abc8c7');gradient.addColorStop(.28,'#6d9da5');gradient.addColorStop(1,'#326e7b');fill=gradient;}
+      ctx.fillStyle=fill;ctx.beginPath();ctx.moveTo(...ocean.points[0]);for(let i=1;i<ocean.points.length;i++)ctx.lineTo(...ocean.points[i]);ctx.closePath();ctx.fill();
+    }
     this.viewProjection=multiply(perspective(cameraFov(s.speed,canvas.clientWidth<canvas.clientHeight)*Math.PI/180,w/h,.5,150000),lookAt(eye,look,up));
     const toCamera=(x,y,z)=>{const a=x-eye[0],b=y-eye[1],c=z-eye[2];return [a*right[0]+b*right[1]+c*right[2],a*cameraUp[0]+b*cameraUp[1]+c*cameraUp[2],-(a*backwards[0]+b*backwards[1]+c*backwards[2])];};
     const project=p=>[w/2+p[0]*focal/p[2],h/2-p[1]*focal/p[2]];

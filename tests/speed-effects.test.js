@@ -28,11 +28,11 @@ test('camera easing is consistent across common frame rates',()=>{
 test('speed warp copies only the scene at speed and clears when stopped',()=>{
   const originalWindow=globalThis.window;globalThis.window={devicePixelRatio:1};
   try {
-    const calls=[],ctx={clearRect(){calls.push('clear')},save(){},restore(){},drawImage(source,...args){calls.push({source,args})},createRadialGradient(){return{addColorStop(){}}},fillRect(){}};
+    const calls=[],ctx={clearRect(){calls.push('clear')},save(){},restore(){},drawImage(source,...args){calls.push({source,args})},createRadialGradient(){return{addColorStop(){}}},createLinearGradient(){calls.push('horizon-mask');return{addColorStop(){}}},fillRect(){}};
     const canvas={width:0,height:0,clientWidth:640,clientHeight:360,getContext(){return ctx;}},scene={width:640,height:360};
     const warp=new SpeedWarp(canvas,scene);
     warp.render(1,120);assert.equal(calls.filter(x=>typeof x==='object').length,0);
-    warp.render(2,305);const images=calls.filter(x=>typeof x==='object');assert.equal(images.length,3);assert(images.every(x=>x.source===scene));
+    warp.render(2,305,{a:0,b:-1,c:.5});const images=calls.filter(x=>typeof x==='object');assert.equal(images.length,3);assert(images.every(x=>x.source===scene));assert(calls.includes('horizon-mask'));
     const clears=calls.filter(x=>x==='clear').length;warp.render(3,0);assert.equal(calls.filter(x=>x==='clear').length,clears+1);
   } finally {if(originalWindow===undefined)delete globalThis.window;else globalThis.window=originalWindow;}
 });

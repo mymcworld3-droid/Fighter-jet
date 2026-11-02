@@ -168,7 +168,7 @@ if(renderer){
     if(wasFlying&&flight.crashed){releaseControls();$('flight-status').textContent='飛行結束';$('end-screen').hidden=false;}
     multiplayer.advance(dt);const peers=multiplayer.peers();
     renderer.render(flight,dt,now/1000,effects,peers);updateWingmen(peers);
-    speedWarp.render(now/1000,flight.crashed?0:flight.speed);speedLines.render(dt,flight.crashed?0:flight.speed);
+    speedWarp.render(now/1000,flight.crashed?0:flight.speed,renderer.oceanHorizon);speedLines.render(dt,flight.crashed?0:flight.speed);
     updateReadouts();requestAnimationFrame(frame);
   }
   message('左手駕駛，右手調整推力或按住射擊',5500);

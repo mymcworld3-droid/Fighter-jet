@@ -21,7 +21,7 @@ export class SpeedWarp {
     this.canvas=canvas;this.source=source;this.ctx=canvas.getContext('2d');
     this.lastDraw=-1;this.active=false;this.failed=false;
   }
-  render(time,speed) {
+  render(time,speed,horizon=null) {
     if(!this.ctx||this.failed)return;
     const c=this.canvas,ctx=this.ctx,intensity=speedIntensity(speed);
     if(intensity<=0){if(this.active)ctx.clearRect(0,0,c.width,c.height);this.active=false;return;}
@@ -45,7 +45,18 @@ export class SpeedWarp {
       gradient.addColorStop(0,'rgba(0,0,0,.10)');
       gradient.addColorStop(.32,'rgba(0,0,0,.25)');
       gradient.addColorStop(1,'rgba(0,0,0,.95)');
-      ctx.fillStyle=gradient;ctx.fillRect(0,0,w,h);ctx.restore();
+      ctx.fillStyle=gradient;ctx.fillRect(0,0,w,h);
+      // Suppress zoom copies around the horizon so the waterline never doubles.
+      if(horizon&&[horizon.a,horizon.b,horizon.c].every(Number.isFinite)){
+        const a=horizon.a/w,b=horizon.b/h,norm2=a*a+b*b;
+        if(norm2>1e-16){
+          const value=a*cx+b*cy+horizon.c,norm=Math.sqrt(norm2),x=cx-value*a/norm2,y=cy-value*b/norm2,band=Math.max(25,Math.min(w,h)*.11);
+          const mask=ctx.createLinearGradient(x-a/norm*band,y-b/norm*band,x+a/norm*band,y+b/norm*band);
+          mask.addColorStop(0,'rgba(0,0,0,0)');mask.addColorStop(.25,'rgba(0,0,0,.75)');mask.addColorStop(.5,'rgba(0,0,0,1)');mask.addColorStop(.75,'rgba(0,0,0,.75)');mask.addColorStop(1,'rgba(0,0,0,0)');
+          ctx.globalCompositeOperation='destination-out';ctx.fillStyle=mask;ctx.fillRect(0,0,w,h);
+        }
+      }
+      ctx.restore();
     } catch(error) {
       ctx.restore();ctx.clearRect(0,0,w,h);this.failed=true;
       console.warn('Speed blur unavailable on this device.',error);
