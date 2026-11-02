@@ -198,6 +198,16 @@ function makeClouds(count=30,rows=5,cols=8){
     const x=(random()-.5)*18000,z=(random()-.5)*18000,y=1200+random()*800, scale=130+random()*210;
     for(let j=0;j<5;j++)sphere(g,x+(j-2)*scale*.6,y+(random()-.5)*scale*.23,z+(random()-.5)*scale*.45,scale*.75,scale*.23,scale*.42,[.88,.92,.90],rows,cols);
   }
+  // Small, world-fixed cloud wisps near the initial route provide close depth
+  // references. Their positions do not depend on the aircraft or frame rate.
+  let referenceSeed=9173;
+  const referenceRandom=()=>{referenceSeed=(referenceSeed*1664525+1013904223)>>>0;return referenceSeed/4294967296;};
+  for(let i=0;i<10;i++)for(const side of [-1,1]){
+    const x=side*(260+referenceRandom()*170),y=300+referenceRandom()*145,z=690-i*500+(referenceRandom()-.5)*120;
+    const size=38+referenceRandom()*22,color=[.83,.91,.90];
+    sphere(g,x,y,z,size,size*.43,size*.55,color,3,6);
+    sphere(g,x+side*size*.58,y+size*.08,z+size*.1,size*.68,size*.34,size*.42,color,2,5);
+  }
   return g;
 }
 function makeJet(){

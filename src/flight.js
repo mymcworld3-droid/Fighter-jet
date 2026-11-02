@@ -17,6 +17,9 @@ export const PARK = {x:1250,z:-2150,ground:75};
 export const TERRAIN_SIZE=18000, WEBGL_TERRAIN_STEPS=150, CANVAS_TERRAIN_STEPS=44;
 export const LANDING_GEAR_CLEARANCE=8;
 export const LANDING_ROLL_LIMIT=.35, LANDING_PITCH_MIN=-.28, LANDING_PITCH_MAX=.30;
+// World units are metres and speed is metres per second throughout the game.
+// Keep the low-throttle speed usable for the winding tunnels.
+export const MIN_FLIGHT_SPEED=155, MAX_FLIGHT_SPEED=460;
 
 export function terrainHeight(x, z) {
   let height = -32;
@@ -130,8 +133,9 @@ export function updateFlight(state, input, elapsed, groundHeight=terrainHeight,g
   state.yaw = (state.yaw + (x * 0.43+(state.impactYawRate||0)) * dt + Math.PI * 2) % (Math.PI * 2);
   state.impactRollRate=(state.impactRollRate||0)*Math.exp(-2.2*dt);
   state.impactYawRate=(state.impactYawRate||0)*Math.exp(-2.2*dt);
-  const targetSpeed = 105 + throttle * 200 - 70*state.gearPosition;
-  state.speed += (targetSpeed - state.speed) * (1 - Math.exp(-0.25 * dt));
+  const power=(throttle-.25)/.75;
+  const targetSpeed=MIN_FLIGHT_SPEED+(MAX_FLIGHT_SPEED-MIN_FLIGHT_SPEED)*power-70*state.gearPosition;
+  state.speed += (targetSpeed-state.speed)*(1-Math.exp(-.42*dt));
   const horizontal = Math.cos(state.pitch) * state.speed * dt;
   state.x += Math.sin(state.yaw) * horizontal;
   state.z -= Math.cos(state.yaw) * horizontal;

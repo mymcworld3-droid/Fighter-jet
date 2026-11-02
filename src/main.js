@@ -1,4 +1,4 @@
-import { clamp, createFlight, updateFlight, setLandingGear } from './flight.js';
+import { clamp, createFlight, updateFlight, setLandingGear, MAX_FLIGHT_SPEED } from './flight.js';
 import { bindPointerControl, leverValue } from './controls.js';
 import { createEffects, updateEffects, registerImpact } from './effects.js';
 import { FlightRenderer, SoftwareFlightRenderer } from './renderer.js';
@@ -199,7 +199,7 @@ if(renderer){
     $('course-count').textContent=`穿越飛行環 ${passedGates.size} / ${FLIGHT_GATES.length}`;
     $('damage-count').hidden=flight.damage<=0;$('damage-count').textContent=`機體損傷 ${Math.round(flight.damage*100)}%`;
     if(!mapModal.hidden)updateMap();
-    $('speed-meter').style.width=`${clamp(speed/1100*100,0,100)}%`;$('altitude-meter').style.width=`${clamp(altitude/2500*100,0,100)}%`;
+    $('speed-meter').style.width=`${clamp(speed/(MAX_FLIGHT_SPEED*3.6)*100,0,100)}%`;$('altitude-meter').style.width=`${clamp(altitude/2500*100,0,100)}%`;
   }
   function frame(now){
     const dt=lastTime?Math.min((now-lastTime)/1000,1):0;lastTime=now;

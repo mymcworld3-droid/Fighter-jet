@@ -1,8 +1,8 @@
-import { clamp } from './flight.js';
+import { clamp, MAX_FLIGHT_SPEED } from './flight.js';
 
 // Based on actual aircraft speed, not throttle position, so the effect builds
 // up and settles in sync with acceleration and deceleration.
-export function speedIntensity(speed) { return clamp((speed-150)/155,0,1); }
+export function speedIntensity(speed) { return clamp((speed-150)/(MAX_FLIGHT_SPEED-150),0,1); }
 export function cameraFov(speed,portrait) { return (portrait?68:58)+13*speedIntensity(speed); }
 // The chase camera sits farther behind the aircraft as speed rises.
 export function chaseCameraOffset(speed) {

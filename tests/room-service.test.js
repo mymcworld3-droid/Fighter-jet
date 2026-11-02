@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
-import { createFlight } from '../src/flight.js';
+import { createFlight, MAX_FLIGHT_SPEED } from '../src/flight.js';
 import { D1RoomStore, MemoryRoomStore, handleRoomRequest, PRESENCE_TTL } from '../server/room-service.js';
 import { createGameServer } from '../server.js';
 import { MultiplayerClient } from '../src/multiplayer.js';
@@ -17,6 +17,14 @@ function sqliteStore(){
   return new D1RoomStore({prepare(sql){return{bind(...params){const stmt=db.prepare(sql);return{async run(){return{meta:{changes:Number(stmt.run(...params).changes)}}},async all(){return{results:stmt.all(...params)}},async first(){return stmt.get(...params)}};}};}});
 }
 for(const [name,make] of [['memory',()=>new MemoryRoomStore()],['D1 SQL',sqliteStore]]){
+  test(`${name}: high-speed aircraft remain visible to other players`,async()=>{
+    const store=make(),a=payload(30),b=payload(31);
+    a.state.speed=MAX_FLIGHT_SPEED;
+    assert.equal((await call(store,{...a,action:'create'})).status,200);
+    const joined=await call(store,{...b,action:'join'});
+    assert.equal(joined.status,200);
+    assert.equal(joined.body.peers[0].state.speed,MAX_FLIGHT_SPEED);
+  });
   test(`${name}: players see only peers in their room and can leave`,async()=>{
     const store=make(),a=payload(1),b=payload(2),other=payload(3,'DEF234');
     a.state.gearDown=true;a.state.onGround=true;delete b.state.gearDown;delete b.state.onGround;
