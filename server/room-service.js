@@ -18,8 +18,8 @@ function validate(payload) {
   if(!numberIn(s.x,-10000000,10000000)||!numberIn(s.y,0,8100)||!numberIn(s.z,-10000000,10000000)||
      !numberIn(s.yaw,-7,7)||!numberIn(s.pitch,-1,1)||!numberIn(s.roll,-2,2)||
      !numberIn(s.speed,0,500)||!numberIn(s.throttle,0,1)||!Number.isSafeInteger(s.shotsFired)||s.shotsFired<0||s.shotsFired>10000000||
-     typeof s.firing!=='boolean'||typeof s.crashed!=='boolean')return null;
-  return {action:payload.action,room,id,token,name,state:{x:s.x,y:s.y,z:s.z,yaw:s.yaw,pitch:s.pitch,roll:s.roll,speed:s.speed,throttle:s.throttle,shotsFired:s.shotsFired,firing:s.firing,crashed:s.crashed}};
+     typeof s.firing!=='boolean'||typeof s.crashed!=='boolean'||(s.gearDown!==undefined&&typeof s.gearDown!=='boolean')||(s.onGround!==undefined&&typeof s.onGround!=='boolean'))return null;
+  return {action:payload.action,room,id,token,name,state:{x:s.x,y:s.y,z:s.z,yaw:s.yaw,pitch:s.pitch,roll:s.roll,speed:s.speed,throttle:s.throttle,shotsFired:s.shotsFired,firing:s.firing,crashed:s.crashed,gearDown:!!s.gearDown,onGround:!!s.onGround}};
 }
 
 const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'}});

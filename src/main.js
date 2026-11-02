@@ -1,4 +1,4 @@
-import { clamp, createFlight, updateFlight } from './flight.js';
+import { clamp, createFlight, updateFlight, setLandingGear, LANDING_SPEED_LIMIT } from './flight.js';
 import { bindPointerControl, leverValue } from './controls.js';
 import { createEffects, updateEffects } from './effects.js';
 import { FlightRenderer, SoftwareFlightRenderer } from './renderer.js';
@@ -53,6 +53,17 @@ if(renderer){
     const active=fireControl.active()||keys.has(' ');
     fireButton.classList.toggle('is-firing',active);fireButton.setAttribute('aria-pressed',String(active));
   };
+  function updateGearButton(){
+    const status=flight.gearDown?(flight.gearPosition<.95?'放下中':'已放下'):(flight.gearPosition>.05?'收起中':'收起');
+    $('gear-status').textContent=status;$('gear-button').setAttribute('aria-pressed',String(flight.gearDown));
+    $('gear-button').setAttribute('aria-label',`切換起落架，目前${status}`);
+  }
+  function toggleGear(){
+    const down=!flight.gearDown;
+    if(!setLandingGear(flight,down)){if(flight.onGround)message('離地後才能收起起落架');return;}
+    updateGearButton();message(down?`起落架放下中；速度低於 ${Math.round(LANDING_SPEED_LIMIT*3.6)} km/h，放平機翼並平緩下降`:'起落架收起中',5000);
+  }
+  $('gear-button').addEventListener('click',toggleGear);
   const fireControl=bindPointerControl(fireButton,{canStart:()=>!flight.crashed,start:()=>{pendingShot=true;updateFireButton();},end:updateFireButton});
   throttle.addEventListener('keydown',e=>{
     const adjustment={ArrowUp:5,ArrowRight:5,ArrowDown:-5,ArrowLeft:-5,PageUp:10,PageDown:-10}[e.key];
@@ -66,7 +77,7 @@ if(renderer){
     flight.x=clamp(other.x-Math.sin(yaw)*180+Math.cos(yaw)*70,-9999900,9999900);
     flight.z=clamp(other.z+Math.cos(yaw)*180+Math.sin(yaw)*70,-9999900,9999900);
     flight.y=Math.min(8000,Math.max(other.y+20,groundHeight(flight.x,flight.z)+60));
-    flight.yaw=yaw;flight.pitch=other.pitch;flight.roll=0;flight.speed=other.speed;flight.crashed=false;renderer.camera=null;
+    flight.yaw=yaw;flight.pitch=other.pitch;flight.roll=0;flight.speed=other.speed;flight.onGround=false;flight.crashed=false;flight.crashReason=null;renderer.camera=null;
   }
   const roomStatus=status=>{
     const online=status.kind==='online'||status.kind==='reconnecting';
@@ -81,7 +92,7 @@ if(renderer){
     if(status.kind==='expired'){$('room-message').textContent='房間已失效，請重新建立或加入。';message('房間已失效，請重新建立或加入');}
   };
   const multiplayer=new MultiplayerClient({
-    getState:()=>({x:flight.x,y:flight.y,z:flight.z,yaw:flight.yaw,pitch:flight.pitch,roll:flight.roll,speed:flight.speed,throttle:flight.throttle,firing:fireControl.active()||keys.has(' '),shotsFired:effects.shotsFired,crashed:flight.crashed}),
+    getState:()=>({x:flight.x,y:flight.y,z:flight.z,yaw:flight.yaw,pitch:flight.pitch,roll:flight.roll,speed:flight.speed,throttle:flight.throttle,gearDown:flight.gearDown,onGround:flight.onGround,firing:fireControl.active()||keys.has(' '),shotsFired:effects.shotsFired,crashed:flight.crashed}),
     onStatus:roomStatus,onSpawn:spawnNear
   });
   const errorMessages={invalid_room:'請輸入正確的 6 位房間代碼。',room_not_found:'找不到房間，請確認代碼或請房主重新建立。',room_full:'房間已滿，目前最多 8 人。',room_exists:'房間代碼已使用，請再試一次。',invalid_session:'連線已失效，請重新加入房間。',server_unavailable:'無法連接多人伺服器，請稍後再試。'};
@@ -130,7 +141,7 @@ if(renderer){
   function switchCamera(){const mode=renderer.toggleCamera();message(mode==='chase'?'追蹤視角':'機首視角');}
   function reset(){
     keys.clear();stickControl.cancel();leverControl.cancel();fireControl.cancel();releaseStick();
-    flight=createFlight();effects=createEffects();passedGates.clear();pendingShot=false;setThrottle(65);updateFireButton();renderer.camera=null;
+    flight=createFlight();effects=createEffects();passedGates.clear();pendingShot=false;setThrottle(65);updateFireButton();updateGearButton();renderer.camera=null;
     if(multiplayer.peers().length)spawnNear(multiplayer.peers()[0].flight);
     $('end-screen').hidden=true;$('flight-status').textContent='飛行中';lastTime=0;message('已重新起飛，祝你飛行愉快');
   }
@@ -145,6 +156,7 @@ if(renderer){
     if(interactive)return;
     if(key===' '){e.preventDefault();if(!flight.crashed){if(!keys.has(key))pendingShot=true;keys.add(key);}updateFireButton();}
     else if(flightKeys.has(key)){e.preventDefault();keys.add(key);}
+    else if(key==='g'&&!e.repeat)toggleGear();
     else if(key==='v'&&!e.repeat)switchCamera();
     else if(key==='r'&&!e.repeat)reset();
   });
@@ -170,6 +182,7 @@ if(renderer){
     $('speed').textContent=speed;$('altitude').textContent=altitude;$('heading').textContent=`${String(heading).padStart(3,'0')}°`;
     $('direction').textContent=['N','NE','E','SE','S','SW','W','NW'][Math.round(heading/45)%8];
     $('shots-fired').textContent=effects.shotsFired;
+    updateGearButton();
     $('course-count').textContent=`穿越飛行環 ${passedGates.size} / ${FLIGHT_GATES.length}`;
     if(!mapModal.hidden)updateMap();
     $('speed-meter').style.width=`${clamp(speed/1100*100,0,100)}%`;$('altitude-meter').style.width=`${clamp(altitude/2500*100,0,100)}%`;
@@ -177,7 +190,7 @@ if(renderer){
   function frame(now){
     const dt=lastTime?Math.min((now-lastTime)/1000,1):0;lastTime=now;
     const input={x:clamp(stick.x+keyAxis(['d','arrowright'],['a','arrowleft']),-1,1),y:clamp(stick.y+keyAxis(['w','arrowup'],['s','arrowdown']),-1,1)};
-    const wasFlying=!flight.crashed;
+    const wasFlying=!flight.crashed,wasOnGround=flight.onGround;
     // Substeps preserve elapsed-time motion on slower devices and avoid skipping collisions.
     for(let remaining=dt;remaining>0;){
       const step=Math.min(remaining,.025),previous={x:flight.x,y:flight.y,z:flight.z};
@@ -185,7 +198,12 @@ if(renderer){
       if(!flight.crashed&&updateCourse(passedGates,previous,flight))message(`飛行環 ${passedGates.size} / ${FLIGHT_GATES.length}！`);
       updateEffects(effects,flight,fireControl.active()||keys.has(' ')||pendingShot,step);pendingShot=false;remaining-=step;
     }
-    if(wasFlying&&flight.crashed){releaseControls();$('flight-status').textContent='飛行結束';$('end-screen').hidden=false;}
+    if(wasFlying&&flight.crashed){
+      releaseControls();$('flight-status').textContent='飛行結束';
+      $('crash-detail').textContent=flight.crashReason==='water'?'戰機碰到海面了；請選擇陸地降落。':flight.crashReason==='gear'?'接地前請先放下起落架，並等輪子完全放下。':'接地時速度、下降速度或傾斜過大，請減速並平緩下降。';
+      $('end-screen').hidden=false;
+    }else if(!wasOnGround&&flight.onGround){$('flight-status').textContent='已落地';message('平穩落地！加速並抬高機頭可再次起飛',5000);}
+    else if(wasOnGround&&!flight.onGround){$('flight-status').textContent='飛行中';message('已起飛，可收起起落架',3500);}
     multiplayer.advance(dt);const peers=multiplayer.peers();
     renderer.render(flight,dt,now/1000,effects,peers);updateWingmen(peers);
     speedWarp.render(now/1000,flight.crashed?0:flight.speed,renderer.oceanHorizon);speedLines.render(dt,flight.crashed?0:flight.speed);

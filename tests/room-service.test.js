@@ -18,11 +18,12 @@ function sqliteStore(){
 for(const [name,make] of [['memory',()=>new MemoryRoomStore()],['D1 SQL',sqliteStore]]){
   test(`${name}: players see only peers in their room and can leave`,async()=>{
     const store=make(),a=payload(1),b=payload(2),other=payload(3,'DEF234');
+    a.state.gearDown=true;a.state.onGround=true;delete b.state.gearDown;delete b.state.onGround;
     assert.equal((await call(store,{...b,action:'join'})).body.error,'room_not_found');
     assert.equal((await call(store,{...a,action:'create'})).body.peers.length,0);
-    const joined=await call(store,{...b,action:'join'});assert.equal(joined.body.peers[0].name,a.name);
+    const joined=await call(store,{...b,action:'join'});assert.equal(joined.body.peers[0].name,a.name);assert.equal(joined.body.peers[0].state.gearDown,true);assert.equal(joined.body.peers[0].state.onGround,true);
     assert.equal((await call(store,{...other,action:'create'})).body.peers.length,0);
-    const result=await call(store,a);assert.equal(result.body.peers[0].id,b.id);
+    const result=await call(store,a);assert.equal(result.body.peers[0].id,b.id);assert.equal(result.body.peers[0].state.gearDown,false);
     assert(!JSON.stringify(result.body).includes(b.token));
     await call(store,{action:'leave',room:b.room,id:b.id,token:b.token});
     assert.equal((await call(store,a)).body.peers.length,0);
@@ -61,4 +62,15 @@ test('default browser fetch is invoked with the global receiver',async()=>{
   globalThis.fetch=function(){assert.equal(this,globalThis);called=true;return Promise.resolve(new Response(JSON.stringify({ok:true,peers:[]})));};
   const client=new MultiplayerClient({getState:()=>({...createFlight(),firing:false,shotsFired:0})});
   try{await client.connect('ABC234','Pilot','create');assert(called);}finally{client.leave(false);globalThis.fetch=original;}
+});
+test('peer landing gear and ground state animate from synchronized updates',()=>{
+  const client=new MultiplayerClient({getState:()=>createFlight()});
+  const state={...createFlight(),firing:false,shotsFired:0},peer={id:'pilot',name:'Pilot',state};
+  client.accept([peer]);client.accept([{...peer,state:{...state,gearDown:true,onGround:true}}]);client.advance(.25);
+  const shown=client.peers()[0].flight;
+  assert(shown.gearDown&&shown.onGround);assert(shown.gearPosition>0&&shown.gearPosition<1);
+  for(let i=0;i<4;i++)client.advance(.25);
+  assert.equal(shown.gearPosition,1);
+  client.accept([{...peer,state:{...state,gearDown:false,onGround:false}}]);client.advance(.25);
+  assert(!shown.gearDown&&!shown.onGround);assert(shown.gearPosition<1);
 });

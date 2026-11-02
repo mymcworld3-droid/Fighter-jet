@@ -3,6 +3,7 @@ import { identity, perspective, lookAt, multiply, aircraftMatrix, transformPoint
 import { cameraFov, chaseCameraOffset, cameraDamping } from './speed-effects.js';
 import { SEA_LEVEL, keepCameraAboveSea, clipTerrainAboveSea, horizonLine, oceanScreenGeometry } from './ocean.js';
 import { FLIGHT_GATES } from './course.js';
+import { terrainOutsideRectangle } from './terrain-geometry.js';
 
 const VERTEX = `
 attribute vec3 aPosition;
@@ -98,8 +99,12 @@ function makeTerrain(steps=WEBGL_TERRAIN_STEPS){
     const a=[x,terrainHeight(x,z),z], b=[x,terrainHeight(x,z+step),z+step], c=[x+step,terrainHeight(x+step,z+step),z+step], d=[x+step,terrainHeight(x+step,z),z];
     const ca=colorForHeight(a[1],a[0],a[2]),cb=colorForHeight(b[1],b[0],b[2]),cc=colorForHeight(c[1],c[0],c[2]),cd=colorForHeight(d[1],d[0],d[2]);
     for(const vertices of [[{position:a,color:ca},{position:b,color:cb},{position:c,color:cc}],[{position:a,color:ca},{position:c,color:cc},{position:d,color:cd}]]){
-      const land=clipTerrainAboveSea(vertices);
-      for(let j=1;j<land.length-1;j++)g.tri(land[0].position,land[j].position,land[j+1].position,null,[land[0].color,land[j].color,land[j+1].color]);
+      const touchesRunway=x<=63&&x+step>=-63&&z<=180&&z+step>=-1450;
+      const pieces=touchesRunway?terrainOutsideRectangle(vertices,{xMin:-63,xMax:63,zMin:-1450,zMax:180}):[vertices];
+      for(const piece of pieces){
+        const land=clipTerrainAboveSea(piece);
+        for(let j=1;j<land.length-1;j++)g.tri(land[0].position,land[j].position,land[j+1].position,null,[land[0].color,land[j].color,land[j+1].color]);
+      }
     }
   }
   return g;
@@ -225,6 +230,37 @@ function makeJet(){
   return g;
 }
 
+function makeLandingGear(){
+  const g=new Geometry(),strut=[.68,.72,.70],tire=[.16,.19,.20],hub=[.57,.61,.58];
+  for(const [x,z,r] of [[0,-15,1.25],[-6.5,7,1.55],[6.5,7,1.55]]){
+    g.box(x,-6.35,z,.7,5.15,.85,strut);
+    const cy=-6.35,half=.7,segments=12;
+    const p=(side,t)=>[x+side*half,cy+Math.cos(t)*r,z+Math.sin(t)*r];
+    for(let i=0;i<segments;i++){
+      const a=i*2*Math.PI/segments,b=(i+1)*2*Math.PI/segments;
+      g.quad(p(-1,a),p(1,a),p(1,b),p(-1,b),tire);
+      g.tri([x-half,cy,z],p(-1,b),p(-1,a),hub);
+      g.tri([x+half,cy,z],p(1,a),p(1,b),hub);
+    }
+  }
+  return g;
+}
+function landingGearMatrix(model,extension){
+  const gear=identity(),amount=clamp(extension||0,0,1);
+  gear[5]=amount;gear[13]=-1.2*(1-amount);
+  return multiply(model,gear);
+}
+
+function makeGroundShadow(s,ground){
+  const g=new Geometry(),height=s.y-ground;
+  if(ground<=.25||height>400||height<0)return g;
+  const opacity=.40*clamp(1-(height-8)/392,0,1),scale=1+Math.max(0,height-8)*.002;
+  const right=[Math.cos(s.yaw),0,Math.sin(s.yaw)],forward=[Math.sin(s.yaw),0,-Math.cos(s.yaw)];
+  const center=[s.x,ground+.35,s.z],p=t=>center.map((v,i)=>v+scale*(right[i]*Math.cos(t)*10+forward[i]*Math.sin(t)*23));
+  for(let i=0;i<16;i++)g.tri(center,p(i*Math.PI/8),p((i+1)*Math.PI/8),[.04,.09,.09],null,[opacity,0,0]);
+  return g;
+}
+
 function makeFlame(s,time){
   const g=new Geometry(),power=(clamp(s.throttle,.25,1)-.25)/.75;
   const length=8+power*18+Math.sin(time*22)*1.4, radius=1.25+power*.8;
@@ -283,7 +319,7 @@ export class FlightRenderer {
     const gl=this.gl;this.program=program(gl);gl.useProgram(this.program);
     this.attributes=Object.fromEntries(['aPosition','aNormal','aColor','aAlpha'].map(n=>[n,gl.getAttribLocation(this.program,n)]));
     this.uniforms=Object.fromEntries(['uModel','uViewProjection','uCamera'].map(n=>[n,gl.getUniformLocation(this.program,n)]));
-    this.sea=upload(gl,makeSea());this.terrain=upload(gl,makeTerrain());this.airport=upload(gl,makeAirport());this.attractions=upload(gl,makeAttractions());this.wheel=upload(gl,makeFerrisWheel());this.clouds=upload(gl,makeClouds());this.jet=upload(gl,makeJet());
+    this.sea=upload(gl,makeSea());this.terrain=upload(gl,makeTerrain());this.airport=upload(gl,makeAirport());this.attractions=upload(gl,makeAttractions());this.wheel=upload(gl,makeFerrisWheel());this.clouds=upload(gl,makeClouds());this.jet=upload(gl,makeJet());this.gear=upload(gl,makeLandingGear());
     this.dynamic=upload(gl,new Geometry(),gl.DYNAMIC_DRAW);
     gl.enable(gl.DEPTH_TEST);gl.clearColor(0,0,0,0);this.camera=null;this.cameraMode='chase';
   }
@@ -319,10 +355,11 @@ export class FlightRenderer {
     const world=identity(),seaModel=identity();seaModel[12]=this.camera[0];seaModel[14]=this.camera[2];
     gl.enable(gl.POLYGON_OFFSET_FILL);gl.polygonOffset(1,2);this.drawMesh(this.sea,seaModel);gl.disable(gl.POLYGON_OFFSET_FILL);
     this.drawMesh(this.terrain,world);this.drawMesh(this.airport,world);this.drawMesh(this.attractions,world);this.drawMesh(this.wheel,ferrisMatrix(time));this.drawMesh(this.clouds,world);
-    if(this.cameraMode==='chase')this.drawMesh(this.jet,model);
-    for(const peer of peers)this.drawMesh(this.jet,aircraftMatrix(peer.flight));
+    if(this.cameraMode==='chase'){this.drawMesh(this.jet,model);if(s.gearPosition>.01)this.drawMesh(this.gear,landingGearMatrix(model,s.gearPosition));}
+    for(const peer of peers){const peerModel=aircraftMatrix(peer.flight);this.drawMesh(this.jet,peerModel);if(peer.flight.gearPosition>.01)this.drawMesh(this.gear,landingGearMatrix(peerModel,peer.flight.gearPosition));}
     const fx=makeWorldEffects(effects,s,this.camera,look,up);
     gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.depthMask(false);
+    replaceGeometry(gl,this.dynamic,makeGroundShadow(s,this.groundHeight(s.x,s.z)));this.drawMesh(this.dynamic,world);
     replaceGeometry(gl,this.dynamic,fx.smoke);this.drawMesh(this.dynamic,world);
     if(!s.crashed){replaceGeometry(gl,this.dynamic,makeFlame(s,time));this.drawMesh(this.dynamic,model);}
     replaceGeometry(gl,this.dynamic,fx.shots);this.drawMesh(this.dynamic,world);
@@ -343,7 +380,7 @@ export class SoftwareFlightRenderer {
     this.canvas=canvas;this.ctx=canvas.getContext('2d',{alpha:true});
     if(!this.ctx)throw new Error('Canvas unavailable');
     this.scene=[makeTerrain(CANVAS_TERRAIN_STEPS),makeAirport(),makeAttractions(),makeClouds(8,3,5)];this.wheel=makeFerrisWheel();
-    this.jet=makeJet();this.camera=null;this.cameraMode='chase';this.lastRender=-1;
+    this.jet=makeJet();this.gear=makeLandingGear();this.camera=null;this.cameraMode='chase';this.lastRender=-1;
   }
   toggleCamera(){this.cameraMode=this.cameraMode==='chase'?'nose':'chase';this.camera=null;return this.cameraMode;}
   groundHeight(x,z){return terrainMeshHeight(x,z,CANVAS_TERRAIN_STEPS);}
@@ -379,8 +416,8 @@ export class SoftwareFlightRenderer {
         if(ain!==bin){const t=(2-a[2])/(b[2]-a[2]);out.push([a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,2]);}
       }return out;
     };
-    const polygons=[];
-    const collect=(geometry,transform)=>{
+    const polygons=[],shadowPolygons=[],ownAircraft=[];
+    const collect=(geometry,transform,target=polygons)=>{
       const p=geometry.positions,n=geometry.normals,c=geometry.colors,alpha=geometry.alphas;
       for(let i=0;i<p.length;i+=9){
         const points=[];
@@ -395,13 +432,15 @@ export class SoftwareFlightRenderer {
         const fog=clamp((depth-3800)/(17500-3800),0,1)*.92;
         const rgb=[0,1,2].map((j)=>Math.round(255*clamp(((c[i+j]+c[i+3+j]+c[i+6+j])/3)*shade*(1-fog)+[.69,.79,.79][j]*fog,0,1)));
         const opacity=(alpha[i/3]+alpha[i/3+1]+alpha[i/3+2])/3;
-        polygons.push({points:projected,depth,color:`rgba(${rgb.join(',')},${opacity})`});
+        target.push({points:projected,depth,color:`rgba(${rgb.join(',')},${opacity})`});
       }
     };
-    for(const mesh of this.scene)collect(mesh,null);collect(this.wheel,ferrisMatrix(time));if(this.cameraMode==='chase')collect(this.jet,model);
-    const fx=makeWorldEffects(effects,s,eye,look,up);collect(fx.smoke,null);collect(fx.shots,null);if(!s.crashed)collect(makeFlame(s,time),model);
-    for(const peer of peers){const otherModel=aircraftMatrix(peer.flight),other=makeWorldEffects(peer.effects,peer.flight,eye,look,up);collect(this.jet,otherModel);collect(other.smoke,null);collect(other.shots,null);if(!peer.flight.crashed)collect(makeFlame(peer.flight,time),otherModel);}
-    polygons.sort((a,b)=>b.depth-a.depth);
-    for(const poly of polygons){ctx.fillStyle=poly.color;ctx.beginPath();ctx.moveTo(...poly.points[0]);for(let j=1;j<poly.points.length;j++)ctx.lineTo(...poly.points[j]);ctx.closePath();ctx.fill();}
+    for(const mesh of this.scene)collect(mesh,null);collect(this.wheel,ferrisMatrix(time));if(this.cameraMode==='chase'){collect(this.jet,model,ownAircraft);if(s.gearPosition>.01)collect(this.gear,landingGearMatrix(model,s.gearPosition),ownAircraft);}
+    const fx=makeWorldEffects(effects,s,eye,look,up);collect(makeGroundShadow(s,this.groundHeight(s.x,s.z)),null,shadowPolygons);collect(fx.smoke,null);collect(fx.shots,null);if(!s.crashed)collect(makeFlame(s,time),model);
+    for(const peer of peers){const otherModel=aircraftMatrix(peer.flight),other=makeWorldEffects(peer.effects,peer.flight,eye,look,up);collect(this.jet,otherModel);if(peer.flight.gearPosition>.01)collect(this.gear,landingGearMatrix(otherModel,peer.flight.gearPosition));collect(other.smoke,null);collect(other.shots,null);if(!peer.flight.crashed)collect(makeFlame(peer.flight,time),otherModel);}
+    for(const layer of [polygons,shadowPolygons,ownAircraft]){
+      layer.sort((a,b)=>b.depth-a.depth);
+      for(const poly of layer){ctx.fillStyle=poly.color;ctx.beginPath();ctx.moveTo(...poly.points[0]);for(let j=1;j<poly.points.length;j++)ctx.lineTo(...poly.points[j]);ctx.closePath();ctx.fill();}
+    }
   }
 }

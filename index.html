@@ -63,15 +63,16 @@
           </div>
           <div class="weapon-panel"><span class="weapon-label">M61 / <b id="shots-fired">0</b> 發</span><button id="fire-button" class="fire-button" type="button" aria-label="按住射擊" aria-pressed="false"><span class="fire-crosshair" aria-hidden="true"></span><strong>FIRE</strong><small>按住射擊</small></button></div>
         </div>
+        <button id="gear-button" class="gear-button" type="button" aria-pressed="false" aria-label="切換起落架，目前收起"><span>起落架</span><strong id="gear-status">收起</strong></button>
         <div class="action-row"><button id="camera-button" type="button" aria-label="切換視角">◉ <span>切換視角</span></button><button id="reset-button" type="button" aria-label="重新開始飛行">↻ <span>重新開始</span></button></div>
       </div>
     </section>
 
-    <div class="keyboard-hint">鍵盤 <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 飛行 <span>·</span> <kbd>SPACE</kbd> 射擊 <span>·</span> <kbd>V</kbd> 切換視角</div>
+    <div class="keyboard-hint">鍵盤 <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 飛行 <span>·</span> <kbd>G</kbd> 起落架 <span>·</span> <kbd>SPACE</kbd> 射擊 <span>·</span> <kbd>V</kbd> 切換視角</div>
     <div id="message" class="message" role="status" aria-live="polite">左手駕駛，右手調整推力或按住射擊</div>
 
     <div id="end-screen" class="end-screen" hidden>
-      <div class="end-card"><span class="eyebrow">FLIGHT ENDED</span><h1>飛行結束</h1><p>戰機碰到地面或海面了。調整機頭，再試一次！</p><button id="restart-button" type="button">重新起飛 <span>↗</span></button></div>
+      <div class="end-card"><span class="eyebrow">FLIGHT ENDED</span><h1>飛行結束</h1><p id="crash-detail">戰機碰到地面或海面了。調整機頭，再試一次！</p><button id="restart-button" type="button">重新起飛 <span>↗</span></button></div>
     </div>
     <div id="map-modal" class="room-modal map-modal" hidden>
       <section class="room-dialog map-dialog" role="dialog" aria-modal="true" aria-labelledby="map-title">
