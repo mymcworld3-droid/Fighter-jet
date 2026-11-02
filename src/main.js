@@ -6,6 +6,8 @@ import { SpeedLines, SpeedWarp } from './speed-effects.js';
 import { MultiplayerClient, createRoomCode, validRoomCode } from './multiplayer.js';
 import { FLIGHT_GATES, updateCourse } from './course.js';
 import { installZoomGuard } from './touch-zoom.js';
+import { attractionHit } from './attractions.js';
+import { createCrashEffect, updateCrashEffect } from './crash-effects.js';
 
 const $ = id => document.getElementById(id);
 const canvas=$('world'), joystick=$('joystick'), knob=$('stick-knob'), throttle=$('throttle'), fireButton=$('fire-button');
@@ -19,7 +21,7 @@ catch (error) {
 }
 
 if(renderer){
-  let flight=createFlight(),effects=createEffects(),stick={x:0,y:0},lastTime=0,messageTimer,pendingShot=false;
+  let flight=createFlight(),effects=createEffects(),stick={x:0,y:0},lastTime=0,messageTimer,pendingShot=false,crash=null;
   const passedGates=new Set();
   const speedLines=new SpeedLines($('speed-lines'));
   const speedWarp=new SpeedWarp($('speed-warp'),canvas);
@@ -78,7 +80,8 @@ if(renderer){
     flight.x=clamp(other.x-Math.sin(yaw)*180+Math.cos(yaw)*70,-9999900,9999900);
     flight.z=clamp(other.z+Math.cos(yaw)*180+Math.sin(yaw)*70,-9999900,9999900);
     flight.y=Math.min(8000,Math.max(other.y+20,groundHeight(flight.x,flight.z)+60));
-    flight.yaw=yaw;flight.pitch=other.pitch;flight.roll=0;flight.speed=other.speed;flight.onGround=false;flight.crashed=false;flight.crashReason=null;renderer.camera=null;
+    flight.yaw=yaw;flight.pitch=other.pitch;flight.roll=0;flight.speed=other.speed;flight.onGround=false;flight.crashed=false;flight.crashReason=null;crash=null;renderer.camera=null;
+    $('end-screen').hidden=true;$('flight-status').textContent='飛行中';
   }
   const roomStatus=status=>{
     const online=status.kind==='online'||status.kind==='reconnecting';
@@ -142,7 +145,7 @@ if(renderer){
   function switchCamera(){const mode=renderer.toggleCamera();message(mode==='chase'?'追蹤視角':'機首視角');}
   function reset(){
     keys.clear();stickControl.cancel();leverControl.cancel();fireControl.cancel();releaseStick();
-    flight=createFlight();effects=createEffects();passedGates.clear();pendingShot=false;setThrottle(65);updateFireButton();updateGearButton();renderer.camera=null;
+    flight=createFlight();effects=createEffects();crash=null;passedGates.clear();pendingShot=false;setThrottle(65);updateFireButton();updateGearButton();renderer.camera=null;
     if(multiplayer.peers().length)spawnNear(multiplayer.peers()[0].flight);
     $('end-screen').hidden=true;$('flight-status').textContent='飛行中';lastTime=0;message('已重新起飛，祝你飛行愉快');
   }
@@ -194,19 +197,25 @@ if(renderer){
     const wasFlying=!flight.crashed,wasOnGround=flight.onGround;
     // Substeps preserve elapsed-time motion on slower devices and avoid skipping collisions.
     for(let remaining=dt;remaining>0;){
-      const step=Math.min(remaining,.025),previous={x:flight.x,y:flight.y,z:flight.z};
+      const step=Math.min(remaining,.025),previous={...flight};
       updateFlight(flight,input,step,groundHeight,groundNormal);
+      if(!previous.crashed){
+        const hit=attractionHit(previous,flight,now/1000-remaining+step,step);
+        if(hit){flight.crashed=true;flight.onGround=false;flight.crashReason='attraction';flight.hitAttraction=hit.kind;}
+        if(flight.crashed){crash=createCrashEffect(flight);renderer.cameraMode='chase';renderer.camera=null;}
+      }else if(crash)updateCrashEffect(crash,step,groundHeight);
       if(!flight.crashed&&updateCourse(passedGates,previous,flight))message(`飛行環 ${passedGates.size} / ${FLIGHT_GATES.length}！`);
       updateEffects(effects,flight,fireControl.active()||keys.has(' ')||pendingShot,step);pendingShot=false;remaining-=step;
     }
     if(wasFlying&&flight.crashed){
       releaseControls();$('flight-status').textContent='飛行結束';
-      $('crash-detail').textContent=flight.crashReason==='water'?'戰機碰到海面了；請選擇陸地降落。':flight.crashReason==='gear'?'接地前請先放下起落架，並等輪子完全放下。':'接地時速度、下降速度或與地面的夾角過大，請貼合地形並平緩下降。';
-      $('end-screen').hidden=false;
+      $('crash-detail').textContent=flight.crashReason==='attraction'?`戰機撞上${flight.hitAttraction==='wheel'?'摩天輪':'雲霄飛車'}了。`:flight.crashReason==='water'?'戰機碰到海面了；請選擇陸地降落。':flight.crashReason==='gear'?'接地前請先放下起落架，並等輪子完全放下。':'接地時速度、下降速度或與地面的夾角過大，請貼合地形並平緩下降。';
+      message('戰機受損！',2000);
     }else if(!wasOnGround&&flight.onGround){$('flight-status').textContent='已落地';message('平穩落地！加速並抬高機頭可再次起飛',5000);}
     else if(wasOnGround&&!flight.onGround){$('flight-status').textContent='飛行中';message('已起飛，可收起起落架',3500);}
-    multiplayer.advance(dt);const peers=multiplayer.peers();
-    renderer.render(flight,dt,now/1000,effects,peers);updateWingmen(peers);
+    if(crash&&crash.age>=2.8)$('end-screen').hidden=false;
+    multiplayer.advance(dt,groundHeight);const peers=multiplayer.peers();
+    renderer.render(flight,dt,now/1000,effects,peers,crash);updateWingmen(peers);
     speedWarp.render(now/1000,flight.crashed?0:flight.speed,renderer.oceanHorizon);speedLines.render(dt,flight.crashed?0:flight.speed);
     updateReadouts();requestAnimationFrame(frame);
   }

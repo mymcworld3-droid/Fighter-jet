@@ -4,6 +4,8 @@ import { cameraFov, chaseCameraOffset, cameraDamping } from './speed-effects.js'
 import { SEA_LEVEL, keepCameraAboveSea, clipTerrainAboveSea, horizonLine, oceanScreenGeometry } from './ocean.js';
 import { FLIGHT_GATES } from './course.js';
 import { terrainOutsideRectangle } from './terrain-geometry.js';
+import { WHEEL, COASTER_SEGMENTS, coasterTrack, wheelAngle } from './attractions.js';
+import { WRECK_PARTS } from './crash-effects.js';
 
 const VERTEX = `
 attribute vec3 aPosition;
@@ -146,7 +148,6 @@ function ring(g,cx,cy,cz,radius,thickness,color,segments=28){
     g.quad(pt(radius,b,-5),pt(radius,b,5),pt(radius,a,5),pt(radius,a,-5),shade);
   }
 }
-const WHEEL={x:PARK.x-180,y:PARK.ground+230,z:PARK.z-90,radius:165};
 function makeFerrisWheel(){
   const g=new Geometry();ring(g,0,0,0,WHEEL.radius,8,[.84,.91,.85],28);
   for(let i=0;i<12;i++){
@@ -157,7 +158,7 @@ function makeFerrisWheel(){
   return g;
 }
 function ferrisMatrix(time){
-  const m=identity(),a=time*.12,c=Math.cos(a),s=Math.sin(a);
+  const m=identity(),a=wheelAngle(time),c=Math.cos(a),s=Math.sin(a);
   m[0]=c;m[1]=s;m[4]=-s;m[5]=c;m[12]=WHEEL.x;m[13]=WHEEL.y;m[14]=WHEEL.z;return m;
 }
 function makeAttractions(){
@@ -166,8 +167,7 @@ function makeAttractions(){
   flatRect(g,x-470,z-440,x+470,z+440,y+2,[.54,.58,.51]);
   for(const dx of [-110,110])for(const dz of [-18,18])beam(g,[WHEEL.x+dx,y+2,WHEEL.z+dz],[WHEEL.x,WHEEL.y,WHEEL.z+dz],9,[.59,.68,.66]);
   // Twin rails and supports for an undulating miniature roller coaster.
-  const track=t=>[x+240+230*Math.cos(t),y+88+54*Math.sin(2*t),z+50+250*Math.sin(t)];
-  const segments=32;
+  const track=coasterTrack,segments=COASTER_SEGMENTS;
   for(let i=0;i<segments;i++){
     const a=track(i*Math.PI*2/segments),b=track((i+1)*Math.PI*2/segments);
     for(const offset of [-9,9])beam(g,[a[0],a[1]+offset,a[2]],[b[0],b[1]+offset,b[2]],5,[.83,.40,.25]);
@@ -229,6 +229,16 @@ function makeJet(){
   }
   return g;
 }
+function splitJet(jet){
+  const groups=Object.fromEntries(WRECK_PARTS.map(part=>[part.id,{geometry:new Geometry(),anchor:part.anchor}]));
+  for(let i=0;i<jet.positions.length;i+=9){
+    const x=(jet.positions[i]+jet.positions[i+3]+jet.positions[i+6])/3,z=(jet.positions[i+2]+jet.positions[i+5]+jet.positions[i+8])/3;
+    const id=x< -4?'left':x>4?'right':z< -8?'nose':z>8?'tail':'body',group=groups[id],g=group.geometry;
+    for(let j=0;j<9;j++)g.positions.push(jet.positions[i+j]-group.anchor[j%3]);
+    g.normals.push(...jet.normals.slice(i,i+9));g.colors.push(...jet.colors.slice(i,i+9));g.alphas.push(...jet.alphas.slice(i/3,i/3+3));
+  }
+  return Object.fromEntries(Object.entries(groups).map(([id,g])=>[id,g.geometry]));
+}
 
 function makeLandingGear(){
   const g=new Geometry(),strut=[.68,.72,.70],tire=[.16,.19,.20],hub=[.57,.61,.58];
@@ -276,6 +286,10 @@ function disc(g,center,right,up,radius,color,opacity){
   const point=t=>[center[0]+radius*(right[0]*Math.cos(t)+up[0]*Math.sin(t)),center[1]+radius*(right[1]*Math.cos(t)+up[1]*Math.sin(t)),center[2]+radius*(right[2]*Math.cos(t)+up[2]*Math.sin(t))];
   for(let i=0;i<8;i++)g.tri(center,point(i*Math.PI/4),point((i+1)*Math.PI/4),color,null,[opacity,0,0]);
 }
+function solidDisc(g,center,right,up,radius,color,opacity){
+  const point=t=>[center[0]+radius*(right[0]*Math.cos(t)+up[0]*Math.sin(t)),center[1]+radius*(right[1]*Math.cos(t)+up[1]*Math.sin(t)),center[2]+radius*(right[2]*Math.cos(t)+up[2]*Math.sin(t))];
+  for(let i=0;i<8;i++)g.tri(center,point(i*Math.PI/4),point((i+1)*Math.PI/4),color,null,opacity);
+}
 function makeWorldEffects(effects,s,eye,look,up){
   const smoke=new Geometry(),shots=new Geometry();
   if(!effects)return {smoke,shots};
@@ -303,6 +317,28 @@ function makeWorldEffects(effects,s,eye,look,up){
   return {smoke,shots};
 }
 
+function makeCrashVisual(crash,eye,look,up){
+  const g=new Geometry();if(!crash)return g;
+  const backwards=normalize(sub(eye,look)),right=normalize(cross(up,backwards)),cameraUp=cross(backwards,right);
+  if(crash.age<.9){
+    const fade=1-crash.age/.9,radius=12+crash.age*65;
+    disc(g,crash.origin,right,cameraUp,radius*1.35,[1,.25,.03],.55*fade);
+    disc(g,crash.origin,right,cameraUp,radius,[1,.60,.10],.85*fade);
+    disc(g,crash.origin,right,cameraUp,radius*.46,[1,.95,.68],.95*fade);
+    solidDisc(g,crash.origin,right,cameraUp,radius*.30,[1,.88,.42],.75*fade);
+  }
+  const flame=clamp(1-crash.age/2.7,0,1);
+  if(flame>0)for(const p of [crash.pieces[1],crash.pieces[4]]){
+    const center=[p.x,p.y+3,p.z],radius=7+Math.sin(crash.age*22)*1.5;
+    disc(g,center,right,cameraUp,radius*1.6,[1,.22,.02],.50*flame);
+    disc(g,center,right,cameraUp,radius,[1,.72,.15],.85*flame);
+    solidDisc(g,center,right,cameraUp,radius*.38,[1,.62,.09],.68*flame);
+  }
+  for(const p of crash.smoke){const fraction=p.age/p.life;disc(g,[p.x,p.y,p.z],right,cameraUp,5+fraction*22,[.18,.20,.20],.34*(1-fraction));}
+  for(const p of crash.sparks){const fade=1-p.age/p.life;disc(g,[p.x,p.y,p.z],right,cameraUp,2.3,[1,.74,.24],.9*fade);}
+  return g;
+}
+
 function projectWorld(viewProjection,p,canvas){
   if(!viewProjection)return null;
   const m=viewProjection,[x,y,z]=p;
@@ -319,7 +355,8 @@ export class FlightRenderer {
     const gl=this.gl;this.program=program(gl);gl.useProgram(this.program);
     this.attributes=Object.fromEntries(['aPosition','aNormal','aColor','aAlpha'].map(n=>[n,gl.getAttribLocation(this.program,n)]));
     this.uniforms=Object.fromEntries(['uModel','uViewProjection','uCamera'].map(n=>[n,gl.getUniformLocation(this.program,n)]));
-    this.sea=upload(gl,makeSea());this.terrain=upload(gl,makeTerrain());this.airport=upload(gl,makeAirport());this.attractions=upload(gl,makeAttractions());this.wheel=upload(gl,makeFerrisWheel());this.clouds=upload(gl,makeClouds());this.jet=upload(gl,makeJet());this.gear=upload(gl,makeLandingGear());
+    this.sea=upload(gl,makeSea());this.terrain=upload(gl,makeTerrain());this.airport=upload(gl,makeAirport());this.attractions=upload(gl,makeAttractions());this.wheel=upload(gl,makeFerrisWheel());this.clouds=upload(gl,makeClouds());
+    const jet=makeJet();this.jet=upload(gl,jet);this.wreck=Object.fromEntries(Object.entries(splitJet(jet)).map(([id,geometry])=>[id,upload(gl,geometry)]));this.gear=upload(gl,makeLandingGear());
     this.dynamic=upload(gl,new Geometry(),gl.DYNAMIC_DRAW);
     gl.enable(gl.DEPTH_TEST);gl.clearColor(0,0,0,0);this.camera=null;this.cameraMode='chase';
   }
@@ -336,7 +373,7 @@ export class FlightRenderer {
     for(const [name,buffer,size] of [['aPosition',mesh.position,3],['aNormal',mesh.normal,3],['aColor',mesh.color,3],['aAlpha',mesh.alpha,1]]){const loc=this.attributes[name];gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,size,gl.FLOAT,false,0,0);}
     gl.uniformMatrix4fv(this.uniforms.uModel,false,model);gl.drawArrays(gl.TRIANGLES,0,mesh.count);
   }
-  render(s,dt,time,effects,peers=[]){
+  render(s,dt,time,effects,peers=[],crash=null){
     this.resize();const gl=this.gl;gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
     const model=aircraftMatrix(s);
     const desired=keepCameraAboveSea(this.cameraMode==='chase'?transformPoint(model,chaseCameraOffset(s.speed)):transformPoint(model,[0,3,-11]));
@@ -356,19 +393,25 @@ export class FlightRenderer {
     const world=identity(),seaModel=identity();seaModel[12]=this.camera[0];seaModel[14]=this.camera[2];
     gl.enable(gl.POLYGON_OFFSET_FILL);gl.polygonOffset(1,2);this.drawMesh(this.sea,seaModel);gl.disable(gl.POLYGON_OFFSET_FILL);
     this.drawMesh(this.terrain,world);this.drawMesh(this.airport,world);this.drawMesh(this.attractions,world);this.drawMesh(this.wheel,ferrisMatrix(time));this.drawMesh(this.clouds,world);
-    if(this.cameraMode==='chase'){this.drawMesh(this.jet,model);if(s.gearPosition>.01)this.drawMesh(this.gear,landingGearMatrix(model,s.gearPosition));}
-    for(const peer of peers){const peerModel=aircraftMatrix(peer.flight);this.drawMesh(this.jet,peerModel);if(peer.flight.gearPosition>.01)this.drawMesh(this.gear,landingGearMatrix(peerModel,peer.flight.gearPosition));}
+    if(crash){for(const part of crash.pieces)this.drawMesh(this.wreck[part.id],aircraftMatrix(part));}
+    else if(this.cameraMode==='chase'){this.drawMesh(this.jet,model);if(s.gearPosition>.01)this.drawMesh(this.gear,landingGearMatrix(model,s.gearPosition));}
+    for(const peer of peers){
+      if(peer.crash){for(const part of peer.crash.pieces)this.drawMesh(this.wreck[part.id],aircraftMatrix(part));}
+      else {const peerModel=aircraftMatrix(peer.flight);this.drawMesh(this.jet,peerModel);if(peer.flight.gearPosition>.01)this.drawMesh(this.gear,landingGearMatrix(peerModel,peer.flight.gearPosition));}
+    }
     const fx=makeWorldEffects(effects,s,this.camera,look,up);
     gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.depthMask(false);
-    replaceGeometry(gl,this.dynamic,makeGroundShadow(s,this.groundHeight(s.x,s.z)));this.drawMesh(this.dynamic,world);
+    if(!crash){replaceGeometry(gl,this.dynamic,makeGroundShadow(s,this.groundHeight(s.x,s.z)));this.drawMesh(this.dynamic,world);}
     replaceGeometry(gl,this.dynamic,fx.smoke);this.drawMesh(this.dynamic,world);
     if(!s.crashed){replaceGeometry(gl,this.dynamic,makeFlame(s,time));this.drawMesh(this.dynamic,model);}
     replaceGeometry(gl,this.dynamic,fx.shots);this.drawMesh(this.dynamic,world);
+    if(crash){replaceGeometry(gl,this.dynamic,makeCrashVisual(crash,this.camera,look,up));this.drawMesh(this.dynamic,world);}
     for(const peer of peers){
       const other=makeWorldEffects(peer.effects,peer.flight,this.camera,look,up);
       replaceGeometry(gl,this.dynamic,other.smoke);this.drawMesh(this.dynamic,world);
       if(!peer.flight.crashed){replaceGeometry(gl,this.dynamic,makeFlame(peer.flight,time));this.drawMesh(this.dynamic,aircraftMatrix(peer.flight));}
       replaceGeometry(gl,this.dynamic,other.shots);this.drawMesh(this.dynamic,world);
+      if(peer.crash){replaceGeometry(gl,this.dynamic,makeCrashVisual(peer.crash,this.camera,look,up));this.drawMesh(this.dynamic,world);}
     }
     gl.depthMask(true);gl.disable(gl.BLEND);
   }
@@ -381,13 +424,13 @@ export class SoftwareFlightRenderer {
     this.canvas=canvas;this.ctx=canvas.getContext('2d',{alpha:true});
     if(!this.ctx)throw new Error('Canvas unavailable');
     this.scene=[makeTerrain(CANVAS_TERRAIN_STEPS),makeAirport(),makeAttractions(),makeClouds(8,3,5)];this.wheel=makeFerrisWheel();
-    this.jet=makeJet();this.gear=makeLandingGear();this.camera=null;this.cameraMode='chase';this.lastRender=-1;
+    this.jet=makeJet();this.wreck=splitJet(this.jet);this.gear=makeLandingGear();this.camera=null;this.cameraMode='chase';this.lastRender=-1;
   }
   toggleCamera(){this.cameraMode=this.cameraMode==='chase'?'nose':'chase';this.camera=null;return this.cameraMode;}
   groundHeight(x,z){return terrainMeshHeight(x,z,CANVAS_TERRAIN_STEPS);}
   groundNormal(x,z){return terrainMeshNormal(x,z,CANVAS_TERRAIN_STEPS);}
   projectPoint(point){return projectWorld(this.viewProjection,point,this.canvas);}
-  render(s,dt,time,effects,peers=[]){
+  render(s,dt,time,effects,peers=[],crash=null){
     if(time-this.lastRender<1/30)return;
     const renderDt=this.lastRender<0?dt:time-this.lastRender;this.lastRender=time;
     const canvas=this.canvas,ratio=Math.min(window.devicePixelRatio||1,1),w=Math.max(1,Math.floor(canvas.clientWidth*ratio)),h=Math.max(1,Math.floor(canvas.clientHeight*ratio));
@@ -437,9 +480,16 @@ export class SoftwareFlightRenderer {
         target.push({points:projected,depth,color:`rgba(${rgb.join(',')},${opacity})`});
       }
     };
-    for(const mesh of this.scene)collect(mesh,null);collect(this.wheel,ferrisMatrix(time));if(this.cameraMode==='chase'){collect(this.jet,model,ownAircraft);if(s.gearPosition>.01)collect(this.gear,landingGearMatrix(model,s.gearPosition),ownAircraft);}
-    const fx=makeWorldEffects(effects,s,eye,look,up);collect(makeGroundShadow(s,this.groundHeight(s.x,s.z)),null,shadowPolygons);collect(fx.smoke,null);collect(fx.shots,null);if(!s.crashed)collect(makeFlame(s,time),model);
-    for(const peer of peers){const otherModel=aircraftMatrix(peer.flight),other=makeWorldEffects(peer.effects,peer.flight,eye,look,up);collect(this.jet,otherModel);if(peer.flight.gearPosition>.01)collect(this.gear,landingGearMatrix(otherModel,peer.flight.gearPosition));collect(other.smoke,null);collect(other.shots,null);if(!peer.flight.crashed)collect(makeFlame(peer.flight,time),otherModel);}
+    for(const mesh of this.scene)collect(mesh,null);collect(this.wheel,ferrisMatrix(time));
+    if(crash){for(const part of crash.pieces)collect(this.wreck[part.id],aircraftMatrix(part),ownAircraft);collect(makeCrashVisual(crash,eye,look,up),null,ownAircraft);}
+    else if(this.cameraMode==='chase'){collect(this.jet,model,ownAircraft);if(s.gearPosition>.01)collect(this.gear,landingGearMatrix(model,s.gearPosition),ownAircraft);}
+    const fx=makeWorldEffects(effects,s,eye,look,up);if(!crash)collect(makeGroundShadow(s,this.groundHeight(s.x,s.z)),null,shadowPolygons);collect(fx.smoke,null);collect(fx.shots,null);if(!s.crashed)collect(makeFlame(s,time),model);
+    for(const peer of peers){
+      const otherModel=aircraftMatrix(peer.flight),other=makeWorldEffects(peer.effects,peer.flight,eye,look,up);
+      if(peer.crash){for(const part of peer.crash.pieces)collect(this.wreck[part.id],aircraftMatrix(part));collect(makeCrashVisual(peer.crash,eye,look,up),null);}
+      else {collect(this.jet,otherModel);if(peer.flight.gearPosition>.01)collect(this.gear,landingGearMatrix(otherModel,peer.flight.gearPosition));}
+      collect(other.smoke,null);collect(other.shots,null);if(!peer.flight.crashed)collect(makeFlame(peer.flight,time),otherModel);
+    }
     for(const layer of [polygons,shadowPolygons,ownAircraft]){
       layer.sort((a,b)=>b.depth-a.depth);
       for(const poly of layer){ctx.fillStyle=poly.color;ctx.beginPath();ctx.moveTo(...poly.points[0]);for(let j=1;j<poly.points.length;j++)ctx.lineTo(...poly.points[j]);ctx.closePath();ctx.fill();}
