@@ -20,7 +20,7 @@
         <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div>
         <div><div class="brand-title">SKYWARD <span> / 01</span></div><div class="brand-subtitle">FIGHTER FLIGHT SIMULATOR</div></div>
       </div>
-      <div class="top-actions"><button id="multiplayer-button" class="multiplayer-button" type="button"><span class="room-dot"></span><span id="multiplayer-label">多人連線</span></button><div class="flight-status"><span class="status-dot"></span><span id="flight-status">飛行中</span><span class="status-divider"></span><span>自由飛行</span></div></div>
+      <div class="top-actions"><button id="map-button" class="multiplayer-button map-button" type="button" aria-haspopup="dialog">地圖</button><button id="multiplayer-button" class="multiplayer-button" type="button"><span class="room-dot"></span><span id="multiplayer-label">多人連線</span></button><div class="flight-status"><span class="status-dot"></span><span id="flight-status">飛行中</span><span class="status-divider"></span><span>自由飛行</span></div></div>
     </header>
 
     <div class="compass" aria-label="航向">
@@ -35,7 +35,7 @@
 
     <div class="reticle" aria-hidden="true"><span class="reticle-wing left"></span><span class="reticle-circle"></span><span class="reticle-wing right"></span><span class="reticle-stem"></span></div>
 
-    <div class="scene-caption"><span class="caption-line"></span><div><strong>OPEN SKY</strong><small>自由探索這片天空</small></div></div>
+    <div class="scene-caption"><span class="caption-line"></span><div><strong>SKY COURSE</strong><small id="course-count">穿越飛行環 0 / 4</small></div></div>
     <div id="remote-labels" class="remote-labels" aria-hidden="true"></div>
     <div id="wingman-radar" class="wingman-radar" hidden aria-label="友機雷達"><span>友機雷達</span><div class="radar-face"><i class="radar-center"></i><div id="radar-dots"></div></div></div>
 
@@ -72,6 +72,30 @@
 
     <div id="end-screen" class="end-screen" hidden>
       <div class="end-card"><span class="eyebrow">FLIGHT ENDED</span><h1>飛行結束</h1><p>戰機碰到地面或海面了。調整機頭，再試一次！</p><button id="restart-button" type="button">重新起飛 <span>↗</span></button></div>
+    </div>
+    <div id="map-modal" class="room-modal map-modal" hidden>
+      <section class="room-dialog map-dialog" role="dialog" aria-modal="true" aria-labelledby="map-title">
+        <button id="map-close" class="room-close" type="button" aria-label="關閉地圖">×</button>
+        <span class="eyebrow">EXPLORE / 自由探索</span><h1 id="map-title">飛行地圖</h1>
+        <p class="room-description">北方在上方；飛機圖示顯示目前位置與航向。開啟地圖時飛行會繼續。</p>
+        <svg class="world-map" viewBox="0 0 1000 1000" role="img" aria-label="群島飛行地圖，包含機場、樂園、沙漠峽谷、雪山與火山島">
+          <rect x="0" y="0" width="1000" height="1000" rx="30" fill="#174751"/>
+          <g fill="none" stroke="#a9d5cb" opacity=".12" stroke-width="2"><path d="M0 250H1000 M0 500H1000 M0 750H1000 M250 0V1000 M500 0V1000 M750 0V1000"/></g>
+          <g fill="#749486" stroke="#aac5b4" stroke-width="5" opacity=".9">
+            <ellipse cx="500" cy="472" rx="125" ry="125"/><ellipse cx="739" cy="256" rx="111" ry="91"/><ellipse cx="250" cy="317" rx="105" ry="105"/>
+            <ellipse cx="350" cy="739" rx="100" ry="82"/><ellipse cx="783" cy="722" rx="100" ry="108"/><ellipse cx="528" cy="878" rx="70" ry="50"/>
+            <ellipse cx="172" cy="172" rx="105" ry="100" fill="#b8a17b"/><ellipse cx="822" cy="194" rx="105" ry="98" fill="#adbeba"/><ellipse cx="172" cy="806" rx="100" ry="98" fill="#74796c"/>
+          </g>
+          <g fill="#e3f8ef" font-family="system-ui, sans-serif" font-size="31" font-weight="600" text-anchor="middle" paint-order="stroke" stroke="#173c42" stroke-width="7" stroke-linejoin="round">
+            <text x="172" y="175">沙漠峽谷</text><text x="822" y="197">雪山</text><text x="172" y="812">火山島</text><text x="784" y="728">群島</text><text x="575" y="340">遊樂園</text><text x="500" y="530">機場</text>
+          </g>
+          <circle cx="569" cy="381" r="12" fill="#f1c778" stroke="#123e43" stroke-width="5"/>
+          <g fill="#a5fff0" stroke="#123e43" stroke-width="5"><circle cx="500" cy="480" r="10"/><circle cx="500" cy="419" r="8"/><circle cx="500" cy="358" r="8"/><circle cx="500" cy="297" r="8"/></g>
+          <g id="map-plane" transform="translate(500 558)"><circle r="25" fill="#0d3440" stroke="#e8fff5" stroke-width="5"/><path d="M0 -19 L12 14 L0 8 L-12 14 Z" fill="#e8fff5"/></g>
+          <text x="938" y="67" fill="#e4fbf3" font-family="system-ui, sans-serif" font-size="36" text-anchor="middle">N ↑</text>
+        </svg>
+        <p id="map-status" class="map-status">青色圓點是飛行環，金色圓點是遊樂園。</p>
+      </section>
     </div>
     <div id="multiplayer-modal" class="room-modal" hidden>
       <section class="room-dialog" role="dialog" aria-modal="true" aria-labelledby="room-title">

@@ -1,9 +1,10 @@
-import { clamp, createFlight, terrainHeight, updateFlight } from './flight.js';
+import { clamp, createFlight, updateFlight } from './flight.js';
 import { bindPointerControl, leverValue } from './controls.js';
 import { createEffects, updateEffects } from './effects.js';
 import { FlightRenderer, SoftwareFlightRenderer } from './renderer.js';
 import { SpeedLines, SpeedWarp } from './speed-effects.js';
 import { MultiplayerClient, createRoomCode, validRoomCode } from './multiplayer.js';
+import { FLIGHT_GATES, updateCourse } from './course.js';
 
 const $ = id => document.getElementById(id);
 const canvas=$('world'), joystick=$('joystick'), knob=$('stick-knob'), throttle=$('throttle'), fireButton=$('fire-button');
@@ -19,8 +20,10 @@ catch (error) {
 
 if(renderer){
   let flight=createFlight(),effects=createEffects(),stick={x:0,y:0},lastTime=0,messageTimer,pendingShot=false;
+  const passedGates=new Set();
   const speedLines=new SpeedLines($('speed-lines'));
   const speedWarp=new SpeedWarp($('speed-warp'),canvas);
+  const groundHeight=(x,z)=>renderer.groundHeight(x,z);
   const keys=new Set();
   const message=(text,duration=3000)=>{
     const el=$('message');el.textContent=text;el.classList.remove('is-hidden');clearTimeout(messageTimer);
@@ -57,12 +60,12 @@ if(renderer){
     else if(e.key==='Home'||e.key==='End'){e.preventDefault();e.stopPropagation();setThrottle(e.key==='Home'?25:100);}
   });
   setThrottle(65);
-  const labels=new Map(),dots=new Map(),roomModal=$('multiplayer-modal');
+  const labels=new Map(),dots=new Map(),roomModal=$('multiplayer-modal'),mapModal=$('map-modal');
   function spawnNear(other){
     const yaw=other.yaw;
     flight.x=clamp(other.x-Math.sin(yaw)*180+Math.cos(yaw)*70,-9999900,9999900);
     flight.z=clamp(other.z+Math.cos(yaw)*180+Math.sin(yaw)*70,-9999900,9999900);
-    flight.y=Math.min(8000,Math.max(other.y+20,terrainHeight(flight.x,flight.z)+60));
+    flight.y=Math.min(8000,Math.max(other.y+20,groundHeight(flight.x,flight.z)+60));
     flight.yaw=yaw;flight.pitch=other.pitch;flight.roll=0;flight.speed=other.speed;flight.crashed=false;renderer.camera=null;
   }
   const roomStatus=status=>{
@@ -127,7 +130,7 @@ if(renderer){
   function switchCamera(){const mode=renderer.toggleCamera();message(mode==='chase'?'追蹤視角':'機首視角');}
   function reset(){
     keys.clear();stickControl.cancel();leverControl.cancel();fireControl.cancel();releaseStick();
-    flight=createFlight();effects=createEffects();pendingShot=false;setThrottle(65);updateFireButton();renderer.camera=null;
+    flight=createFlight();effects=createEffects();passedGates.clear();pendingShot=false;setThrottle(65);updateFireButton();renderer.camera=null;
     if(multiplayer.peers().length)spawnNear(multiplayer.peers()[0].flight);
     $('end-screen').hidden=true;$('flight-status').textContent='飛行中';lastTime=0;message('已重新起飛，祝你飛行愉快');
   }
@@ -137,6 +140,7 @@ if(renderer){
   const flightKeys=new Set(['arrowup','arrowdown','arrowleft','arrowright','w','a','s','d']);
   window.addEventListener('keydown',e=>{
     const key=e.key.toLowerCase();const interactive=e.target instanceof HTMLElement && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
+    if(!mapModal.hidden){if(key==='escape')closeMap();return;}
     if(!roomModal.hidden){if(key==='escape')roomModal.hidden=true;return;}
     if(interactive)return;
     if(key===' '){e.preventDefault();if(!flight.crashed){if(!keys.has(key))pendingShot=true;keys.add(key);}updateFireButton();}
@@ -146,6 +150,15 @@ if(renderer){
   });
   window.addEventListener('keyup',e=>{keys.delete(e.key.toLowerCase());if(e.key===' ')updateFireButton();});
   const releaseControls=()=>{keys.clear();pendingShot=false;stickControl.cancel();leverControl.cancel();fireControl.cancel();releaseStick();updateFireButton();};
+  function closeMap(){mapModal.hidden=true;$('map-button').focus();}
+  $('map-button').addEventListener('click',()=>{releaseControls();mapModal.hidden=false;updateMap();$('map-close').focus();});
+  $('map-close').addEventListener('click',closeMap);
+  mapModal.addEventListener('click',e=>{if(e.target===mapModal)closeMap();});
+  function updateMap(){
+    const x=(flight.x+9000)/18000*1000,z=(flight.z+9000)/18000*1000;
+    $('map-plane').setAttribute('transform',`translate(${clamp(x,28,972)} ${clamp(z,28,972)}) rotate(${flight.yaw*180/Math.PI})`);
+    $('map-status').textContent=(x<0||x>1000||z<0||z>1000)?'目前已飛出地圖範圍，圖示顯示最近的邊界。':'青色圓點是飛行環，金色圓點是遊樂園。';
+  }
   window.addEventListener('blur',releaseControls);
   document.addEventListener('visibilitychange',()=>{if(document.hidden)releaseControls();lastTime=0;});
   window.addEventListener('resize',drawStick);
@@ -157,6 +170,8 @@ if(renderer){
     $('speed').textContent=speed;$('altitude').textContent=altitude;$('heading').textContent=`${String(heading).padStart(3,'0')}°`;
     $('direction').textContent=['N','NE','E','SE','S','SW','W','NW'][Math.round(heading/45)%8];
     $('shots-fired').textContent=effects.shotsFired;
+    $('course-count').textContent=`穿越飛行環 ${passedGates.size} / ${FLIGHT_GATES.length}`;
+    if(!mapModal.hidden)updateMap();
     $('speed-meter').style.width=`${clamp(speed/1100*100,0,100)}%`;$('altitude-meter').style.width=`${clamp(altitude/2500*100,0,100)}%`;
   }
   function frame(now){
@@ -164,7 +179,12 @@ if(renderer){
     const input={x:clamp(stick.x+keyAxis(['d','arrowright'],['a','arrowleft']),-1,1),y:clamp(stick.y+keyAxis(['w','arrowup'],['s','arrowdown']),-1,1)};
     const wasFlying=!flight.crashed;
     // Substeps preserve elapsed-time motion on slower devices and avoid skipping collisions.
-    for(let remaining=dt;remaining>0;){const step=Math.min(remaining,.025);updateFlight(flight,input,step);updateEffects(effects,flight,fireControl.active()||keys.has(' ')||pendingShot,step);pendingShot=false;remaining-=step;}
+    for(let remaining=dt;remaining>0;){
+      const step=Math.min(remaining,.025),previous={x:flight.x,y:flight.y,z:flight.z};
+      updateFlight(flight,input,step,groundHeight);
+      if(!flight.crashed&&updateCourse(passedGates,previous,flight))message(`飛行環 ${passedGates.size} / ${FLIGHT_GATES.length}！`);
+      updateEffects(effects,flight,fireControl.active()||keys.has(' ')||pendingShot,step);pendingShot=false;remaining-=step;
+    }
     if(wasFlying&&flight.crashed){releaseControls();$('flight-status').textContent='飛行結束';$('end-screen').hidden=false;}
     multiplayer.advance(dt);const peers=multiplayer.peers();
     renderer.render(flight,dt,now/1000,effects,peers);updateWingmen(peers);
