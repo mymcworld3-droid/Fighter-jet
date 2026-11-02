@@ -24,7 +24,7 @@ export function terrainHeight(x, z) {
 }
 
 export function createFlight() {
-  return { x: 0, y: 340, z: 1050, yaw: 0, pitch: 0, roll: 0, pitchRate: 0, speed: 170, throttle: 0.65, crashed: false };
+  return { x: 0, y: 340, z: 1050, yaw: 0, pitch: 0, roll: 0, pitchRate: 0, speed: 200, throttle: 0.65, crashed: false };
 }
 
 /** input.x: right positive; input.y: up positive. All rates are time based. */
@@ -39,7 +39,7 @@ export function updateFlight(state, input, elapsed) {
   state.pitch = clamp(state.pitch + state.pitchRate * dt, -0.68, 0.68);
   state.roll += (-x * 0.78 - state.roll) * (1 - Math.exp(-3.5 * dt));
   state.yaw = (state.yaw + x * 0.43 * dt + Math.PI * 2) % (Math.PI * 2);
-  const targetSpeed = 95 + throttle * 130;
+  const targetSpeed = 105 + throttle * 200;
   state.speed += (targetSpeed - state.speed) * (1 - Math.exp(-0.25 * dt));
   const horizontal = Math.cos(state.pitch) * state.speed * dt;
   state.x += Math.sin(state.yaw) * horizontal;

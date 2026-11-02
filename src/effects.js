@@ -15,8 +15,9 @@ export function updateEffects(effects, flight, firing, dt) {
   if (firing && !flight.crashed) {
     effects.shotCooldown-=dt;
     while (effects.shotCooldown<=0) {
-      const side=effects.shotsFired++%2 ? 1 : -1;
-      const p=transformPoint(model,[side*1.3,-.1,-18]);
+      effects.shotsFired++;
+      // The cannon exits just beyond the nose, so the projectile never starts inside the aircraft.
+      const p=transformPoint(model,[0,0,-25.5]);
       const speed=flight.speed+850;
       effects.bullets.push({x:p[0],y:p[1],z:p[2],vx:forward[0]*speed,vy:forward[1]*speed,vz:forward[2]*speed,age:0,life:1.4});
       effects.shotCooldown+=0.11;

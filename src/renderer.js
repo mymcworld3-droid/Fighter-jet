@@ -1,5 +1,6 @@
 import { terrainHeight, clamp } from './flight.js';
 import { identity, perspective, lookAt, multiply, aircraftMatrix, transformPoint, normalize, cross, sub } from './math.js';
+import { cameraFov, speedIntensity } from './speed-effects.js';
 
 const VERTEX = `
 attribute vec3 aPosition;
@@ -195,13 +196,19 @@ function makeWorldEffects(effects,s,eye,look,up){
   }
   for(const bullet of effects.bullets){
     const p=[bullet.x,bullet.y,bullet.z],direction=normalize([bullet.vx,bullet.vy,bullet.vz]);
-    const side=normalize(cross(direction,sub(eye,p))),width=2.4+Math.min(3,Math.hypot(...sub(eye,p))*.002),tail=p.map((v,i)=>v-direction[i]*48);
+    const side=normalize(cross(direction,sub(eye,p))),width=.9+Math.min(2.4,Math.hypot(...sub(eye,p))*.002),tail=p.map((v,i)=>v-direction[i]*48);
     const point=(base,factor)=>base.map((v,i)=>v+side[i]*width*factor);
-    shots.quad(point(p,1),point(p,-1),point(tail,-.35),point(tail,.35),[1,.95,.55],1);
+    // A translucent halo surrounds a narrow white-hot tracer, both attached to the 3D projectile.
+    shots.quad(point(p,3.5),point(p,-3.5),point(tail,-1.1),point(tail,1.1),[.14,1,.76],.16);
+    shots.quad(point(p,1.05),point(p,-1.05),point(tail,-.30),point(tail,.30),[.25,1,.82],.82);
+    shots.quad(point(p,.38),point(p,-.38),point(tail,-.10),point(tail,.10),[.90,1,1],1);
+    disc(shots,p,right,cameraUp,width*3.5,[.12,1,.80],.38);
   }
   if(effects.flash>0){
     const model=aircraftMatrix(s);
-    for(const side of [-1,1])disc(shots,transformPoint(model,[side*1.3,0,-20]),right,cameraUp,4.2,[1,.74,.29],.9);
+    const muzzle=transformPoint(model,[0,0,-25.7]);
+    disc(shots,muzzle,right,cameraUp,5,[.12,1,.80],.75);
+    disc(shots,muzzle,right,cameraUp,1.5,[.92,1,1],.95);
   }
   return {smoke,shots};
 }
@@ -230,13 +237,13 @@ export class FlightRenderer {
   render(s,dt,time,effects){
     this.resize();const gl=this.gl;gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
     const model=aircraftMatrix(s);
-    const desired=this.cameraMode==='chase'?transformPoint(model,[0,19,72]):transformPoint(model,[0,3,-11]);
+    const desired=this.cameraMode==='chase'?transformPoint(model,[0,19,72-10*speedIntensity(s.speed)]):transformPoint(model,[0,3,-11]);
     // The chase camera rolls gently with the aircraft while preserving the horizon.
     const look=this.cameraMode==='chase'?transformPoint(model,[0,2,-28]):transformPoint(model,[0,2,-150]);
     if(!this.camera)this.camera=desired.slice();
-    const k=1-Math.exp(-clamp(dt,0,0.25)*5);for(let i=0;i<3;i++)this.camera[i]+=(desired[i]-this.camera[i])*k;
+    const k=1-Math.exp(-clamp(dt,0,0.25)*7);for(let i=0;i<3;i++)this.camera[i]+=(desired[i]-this.camera[i])*k;
     const up=this.cameraMode==='chase'?[Math.sin(-s.roll)*.25,1,0]:[model[4],model[5],model[6]];
-    const projection=perspective((this.canvas.clientWidth<this.canvas.clientHeight?68:58)*Math.PI/180,this.canvas.width/this.canvas.height,.5,150000);
+    const projection=perspective(cameraFov(s.speed,this.canvas.clientWidth<this.canvas.clientHeight)*Math.PI/180,this.canvas.width/this.canvas.height,.5,150000);
     gl.uniformMatrix4fv(this.uniforms.uViewProjection,false,multiply(projection,lookAt(this.camera,look,up)));
     gl.uniform3fv(this.uniforms.uCamera,this.camera);gl.uniform1f(this.uniforms.uTime,time);
     const world=identity();this.drawMesh(this.sea,world,1);this.drawMesh(this.terrain,world);this.drawMesh(this.airport,world);this.drawMesh(this.clouds,world);
@@ -265,13 +272,13 @@ export class SoftwareFlightRenderer {
     const canvas=this.canvas,ratio=Math.min(window.devicePixelRatio||1,1),w=Math.max(1,Math.floor(canvas.clientWidth*ratio)),h=Math.max(1,Math.floor(canvas.clientHeight*ratio));
     if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}
     const ctx=this.ctx;ctx.clearRect(0,0,w,h);
-    const model=aircraftMatrix(s),desired=this.cameraMode==='chase'?transformPoint(model,[0,19,72]):transformPoint(model,[0,3,-11]);
+    const model=aircraftMatrix(s),desired=this.cameraMode==='chase'?transformPoint(model,[0,19,72-10*speedIntensity(s.speed)]):transformPoint(model,[0,3,-11]);
     const look=this.cameraMode==='chase'?transformPoint(model,[0,2,-28]):transformPoint(model,[0,2,-150]);
     if(!this.camera)this.camera=desired.slice();
-    const smoothing=1-Math.exp(-clamp(dt,0,.25)*5);for(let i=0;i<3;i++)this.camera[i]+=(desired[i]-this.camera[i])*smoothing;
+    const smoothing=1-Math.exp(-clamp(dt,0,.25)*7);for(let i=0;i<3;i++)this.camera[i]+=(desired[i]-this.camera[i])*smoothing;
     const up=this.cameraMode==='chase'?[Math.sin(-s.roll)*.25,1,0]:[model[4],model[5],model[6]];
     const backwards=normalize(sub(this.camera,look)),right=normalize(cross(up,backwards)),cameraUp=cross(backwards,right),eye=this.camera;
-    const focal=h/(2*Math.tan((canvas.clientWidth<canvas.clientHeight?68:58)*Math.PI/360));
+    const focal=h/(2*Math.tan(cameraFov(s.speed,canvas.clientWidth<canvas.clientHeight)*Math.PI/360));
     const toCamera=(x,y,z)=>{const a=x-eye[0],b=y-eye[1],c=z-eye[2];return [a*right[0]+b*right[1]+c*right[2],a*cameraUp[0]+b*cameraUp[1]+c*cameraUp[2],-(a*backwards[0]+b*backwards[1]+c*backwards[2])];};
     const project=p=>[w/2+p[0]*focal/p[2],h/2-p[1]*focal/p[2]];
     // Clip against the near plane, so triangles remain valid as the camera moves through them.

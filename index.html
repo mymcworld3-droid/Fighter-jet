@@ -11,6 +11,7 @@
 <body>
   <main class="simulator" aria-label="3D 戰鬥機模擬器">
     <canvas id="world" aria-label="飛行畫面"></canvas>
+    <canvas id="speed-lines" class="speed-lines" aria-hidden="true"></canvas>
     <div class="screen-tint" aria-hidden="true"></div>
 
     <header class="topbar">
@@ -27,12 +28,11 @@
     </div>
 
     <section class="readouts" aria-label="飛行資訊">
-      <div class="readout"><span class="readout-name">AIRSPEED <i>速度</i></span><div><strong id="speed">612</strong><small>KM/H</small></div><span class="meter"><b id="speed-meter"></b></span></div>
+      <div class="readout"><span class="readout-name">AIRSPEED <i>速度</i></span><div><strong id="speed">720</strong><small>KM/H</small></div><span class="meter"><b id="speed-meter"></b></span></div>
       <div class="readout"><span class="readout-name">ALTITUDE <i>高度</i></span><div><strong id="altitude">360</strong><small>M</small></div><span class="meter"><b id="altitude-meter"></b></span></div>
     </section>
 
     <div class="reticle" aria-hidden="true"><span class="reticle-wing left"></span><span class="reticle-circle"></span><span class="reticle-wing right"></span><span class="reticle-stem"></span></div>
-    <div id="fire-hud" class="fire-hud" aria-hidden="true"><i style="--lane:-20px;--delay:0s"></i><i style="--lane:20px;--delay:.08s"></i><i style="--lane:-13px;--delay:.16s"></i><i style="--lane:13px;--delay:.24s"></i></div>
 
     <div class="scene-caption"><span class="caption-line"></span><div><strong>OPEN SKY</strong><small>自由探索這片天空</small></div></div>
 
