@@ -1,6 +1,6 @@
 import { terrainHeight, clamp } from './flight.js';
 import { identity, perspective, lookAt, multiply, aircraftMatrix, transformPoint, normalize, cross, sub } from './math.js';
-import { cameraFov, speedIntensity } from './speed-effects.js';
+import { cameraFov, chaseCameraOffset, cameraDamping } from './speed-effects.js';
 
 const VERTEX = `
 attribute vec3 aPosition;
@@ -237,11 +237,11 @@ export class FlightRenderer {
   render(s,dt,time,effects){
     this.resize();const gl=this.gl;gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
     const model=aircraftMatrix(s);
-    const desired=this.cameraMode==='chase'?transformPoint(model,[0,19,72-10*speedIntensity(s.speed)]):transformPoint(model,[0,3,-11]);
+    const desired=this.cameraMode==='chase'?transformPoint(model,chaseCameraOffset(s.speed)):transformPoint(model,[0,3,-11]);
     // The chase camera rolls gently with the aircraft while preserving the horizon.
     const look=this.cameraMode==='chase'?transformPoint(model,[0,2,-28]):transformPoint(model,[0,2,-150]);
     if(!this.camera)this.camera=desired.slice();
-    const k=1-Math.exp(-clamp(dt,0,0.25)*7);for(let i=0;i<3;i++)this.camera[i]+=(desired[i]-this.camera[i])*k;
+    const k=cameraDamping(dt,s.speed,this.cameraMode==='chase');for(let i=0;i<3;i++)this.camera[i]+=(desired[i]-this.camera[i])*k;
     const up=this.cameraMode==='chase'?[Math.sin(-s.roll)*.25,1,0]:[model[4],model[5],model[6]];
     const projection=perspective(cameraFov(s.speed,this.canvas.clientWidth<this.canvas.clientHeight)*Math.PI/180,this.canvas.width/this.canvas.height,.5,150000);
     gl.uniformMatrix4fv(this.uniforms.uViewProjection,false,multiply(projection,lookAt(this.camera,look,up)));
@@ -268,14 +268,15 @@ export class SoftwareFlightRenderer {
   }
   toggleCamera(){this.cameraMode=this.cameraMode==='chase'?'nose':'chase';this.camera=null;return this.cameraMode;}
   render(s,dt,time,effects){
-    if(time-this.lastRender<1/30)return;this.lastRender=time;
+    if(time-this.lastRender<1/30)return;
+    const renderDt=this.lastRender<0?dt:time-this.lastRender;this.lastRender=time;
     const canvas=this.canvas,ratio=Math.min(window.devicePixelRatio||1,1),w=Math.max(1,Math.floor(canvas.clientWidth*ratio)),h=Math.max(1,Math.floor(canvas.clientHeight*ratio));
     if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}
     const ctx=this.ctx;ctx.clearRect(0,0,w,h);
-    const model=aircraftMatrix(s),desired=this.cameraMode==='chase'?transformPoint(model,[0,19,72-10*speedIntensity(s.speed)]):transformPoint(model,[0,3,-11]);
+    const model=aircraftMatrix(s),desired=this.cameraMode==='chase'?transformPoint(model,chaseCameraOffset(s.speed)):transformPoint(model,[0,3,-11]);
     const look=this.cameraMode==='chase'?transformPoint(model,[0,2,-28]):transformPoint(model,[0,2,-150]);
     if(!this.camera)this.camera=desired.slice();
-    const smoothing=1-Math.exp(-clamp(dt,0,.25)*7);for(let i=0;i<3;i++)this.camera[i]+=(desired[i]-this.camera[i])*smoothing;
+    const smoothing=cameraDamping(renderDt,s.speed,this.cameraMode==='chase');for(let i=0;i<3;i++)this.camera[i]+=(desired[i]-this.camera[i])*smoothing;
     const up=this.cameraMode==='chase'?[Math.sin(-s.roll)*.25,1,0]:[model[4],model[5],model[6]];
     const backwards=normalize(sub(this.camera,look)),right=normalize(cross(up,backwards)),cameraUp=cross(backwards,right),eye=this.camera;
     const focal=h/(2*Math.tan(cameraFov(s.speed,canvas.clientWidth<canvas.clientHeight)*Math.PI/360));

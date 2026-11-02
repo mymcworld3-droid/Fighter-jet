@@ -2,7 +2,7 @@ import { clamp, createFlight, updateFlight } from './flight.js';
 import { bindPointerControl, leverValue } from './controls.js';
 import { createEffects, updateEffects } from './effects.js';
 import { FlightRenderer, SoftwareFlightRenderer } from './renderer.js';
-import { SpeedLines } from './speed-effects.js';
+import { SpeedLines, SpeedWarp } from './speed-effects.js';
 
 const $ = id => document.getElementById(id);
 const canvas=$('world'), joystick=$('joystick'), knob=$('stick-knob'), throttle=$('throttle'), fireButton=$('fire-button');
@@ -19,6 +19,7 @@ catch (error) {
 if(renderer){
   let flight=createFlight(),effects=createEffects(),stick={x:0,y:0},lastTime=0,messageTimer,pendingShot=false;
   const speedLines=new SpeedLines($('speed-lines'));
+  const speedWarp=new SpeedWarp($('speed-warp'),canvas);
   const keys=new Set();
   const message=(text,duration=3000)=>{
     const el=$('message');el.textContent=text;el.classList.remove('is-hidden');clearTimeout(messageTimer);
@@ -95,7 +96,9 @@ if(renderer){
     // Substeps preserve elapsed-time motion on slower devices and avoid skipping collisions.
     for(let remaining=dt;remaining>0;){const step=Math.min(remaining,.025);updateFlight(flight,input,step);updateEffects(effects,flight,fireControl.active()||keys.has(' ')||pendingShot,step);pendingShot=false;remaining-=step;}
     if(wasFlying&&flight.crashed){releaseControls();$('flight-status').textContent='飛行結束';$('end-screen').hidden=false;}
-    renderer.render(flight,dt,now/1000,effects);speedLines.render(dt,flight.crashed?0:flight.speed);updateReadouts();requestAnimationFrame(frame);
+    renderer.render(flight,dt,now/1000,effects);
+    speedWarp.render(now/1000,flight.crashed?0:flight.speed);speedLines.render(dt,flight.crashed?0:flight.speed);
+    updateReadouts();requestAnimationFrame(frame);
   }
   message('左手駕駛，右手調整推力或按住射擊',5500);
   requestAnimationFrame(frame);
