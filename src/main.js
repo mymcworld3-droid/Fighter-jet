@@ -11,6 +11,7 @@ import { createCrashEffect, updateCrashEffect } from './crash-effects.js';
 import { impactResponse, applyImpact } from './impact.js';
 import { DAMAGE_PARTS, damageColor, markCrashDamage } from './damage.js';
 import { TUNNELS } from './tunnels.js';
+import { FLYTHROUGH } from './flythrough.js';
 
 const $ = id => document.getElementById(id);
 const canvas=$('world'), joystick=$('joystick'), knob=$('stick-knob'), throttle=$('throttle'), fireButton=$('fire-button');
@@ -180,10 +181,20 @@ if(renderer){
     path.setAttribute('stroke',`rgb(${tunnel.color.map(n=>Math.round(n*255)).join(',')})`);
     const title=document.createElementNS(svgNS,'title');title.textContent=tunnel.name;path.appendChild(title);mapTunnels.appendChild(path);
   }
+  for(const [index,facility] of FLYTHROUGH.entries()){
+    const marker=document.createElementNS(svgNS,'g'),x=(facility.marker[0]+9000)/18,z=(facility.marker[1]+9000)/18;
+    marker.setAttribute('transform',`translate(${x} ${z})`);
+    const diamond=document.createElementNS(svgNS,'path');
+    diamond.setAttribute('d','M 0 -23 L 23 0 L 0 23 L -23 0 Z');diamond.setAttribute('fill','#f5ba73');diamond.setAttribute('stroke','#123e43');diamond.setAttribute('stroke-width','5');
+    const number=document.createElementNS(svgNS,'text');number.setAttribute('text-anchor','middle');number.setAttribute('dominant-baseline','central');number.setAttribute('font-size','25');number.setAttribute('font-family','system-ui, sans-serif');number.setAttribute('font-weight','700');number.setAttribute('fill','#123e43');number.textContent=String(index+1);
+    const title=document.createElementNS(svgNS,'title');title.textContent=`${facility.name}（${facility.altitude}）`;
+    marker.append(diamond,number,title);$('map-flythrough').appendChild(marker);
+    const item=document.createElement('span');item.textContent=`${index+1} ◇ ${facility.name} · ${facility.altitude}`;$('map-flythrough-legend').appendChild(item);
+  }
   function updateMap(){
     const x=(flight.x+9000)/18000*1000,z=(flight.z+9000)/18000*1000;
     $('map-plane').setAttribute('transform',`translate(${clamp(x,28,972)} ${clamp(z,28,972)}) rotate(${flight.yaw*180/Math.PI})`);
-    $('map-status').textContent=(x<0||x>1000||z<0||z>1000)?'目前已飛出地圖範圍，圖示顯示最近的邊界。':'青色圓點是飛行環，金色圓點是遊樂園；彩色曲線是空中隧道（約 600–1,350 公尺高）。';
+    $('map-status').textContent=(x<0||x>1000||z<0||z>1000)?'目前已飛出地圖範圍，圖示顯示最近的邊界。':'青色圓點是飛行環，金色圓點是遊樂園；彩色曲線是空中隧道，編號菱形是穿梭設施。';
   }
   window.addEventListener('blur',releaseControls);
   document.addEventListener('visibilitychange',()=>{if(document.hidden)releaseControls();lastTime=0;});
@@ -259,7 +270,7 @@ if(renderer){
     }
     if(wasFlying&&flight.crashed){
       releaseControls();$('flight-status').textContent='飛行結束';
-      $('crash-detail').textContent=flight.crashReason==='attraction'?`戰機撞上${{wheel:'摩天輪',coaster:'雲霄飛車',tunnel:'空中隧道'}[flight.hitAttraction]||'障礙物'}了。`:flight.crashReason==='water'?'戰機碰到海面了；請選擇陸地降落。':flight.crashReason==='gear'?'接地前請先放下起落架，並等輪子完全放下。':'接地時機身與地面的夾角過大，請對準地形再降落。';
+      $('crash-detail').textContent=flight.crashReason==='attraction'?`戰機撞上${{wheel:'摩天輪',coaster:'雲霄飛車',tunnel:'空中隧道',skybridge:'海上三孔橋',skyframes:'空中方框廊',spiral:'螺旋環廊',skypyramid:'天空金字塔'}[flight.hitAttraction]||'障礙物'}了。`:flight.crashReason==='water'?'戰機碰到海面了；請選擇陸地降落。':flight.crashReason==='gear'?'接地前請先放下起落架，並等輪子完全放下。':'接地時機身與地面的夾角過大，請對準地形再降落。';
       message('戰機受損！',2000);
     }else if(!wasOnGround&&flight.onGround){$('flight-status').textContent='已落地';message('平穩落地！加速並抬高機頭可再次起飛',5000);}
     else if(wasOnGround&&!flight.onGround){$('flight-status').textContent='飛行中';message('已起飛，可收起起落架',3500);}
