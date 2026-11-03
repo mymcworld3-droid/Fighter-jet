@@ -55,7 +55,7 @@ html,body{overscroll-behavior:none}
 .scene-caption small[hidden]{display:none}
 
 /* Aircraft condition is kept in the upper-right, clear of the controls. */
-.damage-panel{position:absolute;right:max(38px,env(safe-area-inset-right));top:max(72px,calc(env(safe-area-inset-top) + 58px));width:224px;padding:9px 11px 8px;border:1px solid #c9f6e93d;border-radius:7px;background:#102e37c4;backdrop-filter:blur(7px);pointer-events:none;box-shadow:0 7px 22px #041a1b26}
+.damage-panel{position:absolute;right:max(38px,env(safe-area-inset-right));top:max(72px,calc(env(safe-area-inset-top) + 58px));width:224px;padding:9px 11px 8px;border:1px solid transparent;background:transparent;pointer-events:none;text-shadow:0 1px 3px #071b1e,0 0 7px #08232a}
 .damage-heading{display:flex;justify-content:space-between;align-items:baseline;gap:6px;margin-bottom:8px;white-space:nowrap}
 .damage-heading strong{font-size:11px;letter-spacing:.04em;color:#eafff8}.damage-heading>span{font-size:10px;color:#cbe3dd}
 .damage-content{display:flex;align-items:center;gap:8px}
