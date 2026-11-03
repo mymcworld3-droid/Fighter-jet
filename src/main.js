@@ -180,6 +180,12 @@ if(renderer){
     path.setAttribute('d',tunnel.centers.map((p,i)=>`${i?'L':'M'} ${(p[0]+9000)/18} ${(p[2]+9000)/18}`).join(' '));
     path.setAttribute('stroke',`rgb(${tunnel.color.map(n=>Math.round(n*255)).join(',')})`);
     const title=document.createElementNS(svgNS,'title');title.textContent=tunnel.name;path.appendChild(title);mapTunnels.appendChild(path);
+    if(tunnel.id==='long')for(const point of [tunnel.centers[0],tunnel.centers.at(-1)]){
+      const entrance=document.createElementNS(svgNS,'circle');
+      entrance.setAttribute('cx',(point[0]+9000)/18);entrance.setAttribute('cy',(point[2]+9000)/18);
+      entrance.setAttribute('r','14');entrance.setAttribute('fill','#f561a1');entrance.setAttribute('stroke','#fff1e6');entrance.setAttribute('stroke-width','5');
+      const label=document.createElementNS(svgNS,'title');label.textContent=`${tunnel.name}入口`;entrance.appendChild(label);mapTunnels.appendChild(entrance);
+    }
   }
   for(const [index,facility] of FLYTHROUGH.entries()){
     const marker=document.createElementNS(svgNS,'g'),x=(facility.marker[0]+9000)/18,z=(facility.marker[1]+9000)/18;
@@ -194,7 +200,7 @@ if(renderer){
   function updateMap(){
     const x=(flight.x+9000)/18000*1000,z=(flight.z+9000)/18000*1000;
     $('map-plane').setAttribute('transform',`translate(${clamp(x,28,972)} ${clamp(z,28,972)}) rotate(${flightHeading(flight)*180/Math.PI})`);
-    $('map-status').textContent=(x<0||x>1000||z<0||z>1000)?'目前已飛出地圖範圍，圖示顯示最近的邊界。':'青色圓點是飛行環，金色圓點是遊樂園；彩色曲線是空中隧道，編號菱形是穿梭設施。';
+    $('map-status').textContent=(x<0||x>1000||z<0||z>1000)?'目前已飛出地圖範圍，圖示顯示最近的邊界。':'青點是飛行環、金點是樂園、菱形是設施；粉紅長線是約 18 公里的天際長曲隧道（高度約 2,450–2,900 公尺），兩端圓點是入口。';
   }
   window.addEventListener('blur',releaseControls);
   document.addEventListener('visibilitychange',()=>{if(document.hidden)releaseControls();lastTime=0;});

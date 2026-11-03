@@ -6,17 +6,19 @@ export const TUNNEL_SEGMENTS=32, TUNNEL_SIDES=12;
 const profiles=[
   {id:'cloud',name:'雲際彎道',x:-850,y:650,z:-1400,length:2700,waveX:260,waveY:100,rise:120,radius:150,color:[.27,.75,.80]},
   {id:'sunset',name:'夕霞隧道',x:3000,y:850,z:-1300,length:2800,waveX:-310,waveY:135,rise:80,radius:160,color:[.90,.54,.36]},
-  {id:'island',name:'群島蜿道',x:-3600,y:1050,z:1100,length:3100,waveX:330,waveY:-140,rise:160,radius:160,color:[.60,.55,.87]}
+  {id:'island',name:'群島蜿道',x:-3600,y:1050,z:1100,length:3100,waveX:330,waveY:-140,rise:160,radius:160,color:[.60,.55,.87]},
+  {id:'long',name:'天際長曲隧道',x:6000,y:2600,z:7000,length:14000,waveX:850,waveY:200,rise:120,turnsX:3,turnsY:2,segmentCount:128,radius:230,color:[.96,.38,.63]}
 ];
 
 export function tunnelCenter(tunnel,t){
   const turn=2*Math.PI*t;
-  return [tunnel.x+tunnel.waveX*Math.sin(turn),tunnel.y+tunnel.rise*t+tunnel.waveY*Math.sin(turn),tunnel.z-tunnel.length*t];
+  return [tunnel.x+tunnel.waveX*Math.sin(turn*(tunnel.turnsX||1)),tunnel.y+tunnel.rise*t+tunnel.waveY*Math.sin(turn*(tunnel.turnsY||1)),tunnel.z-tunnel.length*t];
 }
 function sampleTunnel(tunnel){
-  const centers=Array.from({length:TUNNEL_SEGMENTS+1},(_,i)=>tunnelCenter(tunnel,i/TUNNEL_SEGMENTS));
+  const count=tunnel.segmentCount||TUNNEL_SEGMENTS;
+  const centers=Array.from({length:count+1},(_,i)=>tunnelCenter(tunnel,i/count));
   const rings=centers.map((center,i)=>{
-    const tangent=normalize(sub(centers[Math.min(i+1,TUNNEL_SEGMENTS)],centers[Math.max(i-1,0)]));
+    const tangent=normalize(sub(centers[Math.min(i+1,count)],centers[Math.max(i-1,0)]));
     const right=normalize(cross(tangent,[0,1,0])),up=normalize(cross(right,tangent));
     return Array.from({length:TUNNEL_SIDES},(_,j)=>{
       const angle=j*2*Math.PI/TUNNEL_SIDES;

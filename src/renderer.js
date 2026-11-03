@@ -6,7 +6,7 @@ import { FLIGHT_GATES } from './course.js';
 import { terrainOutsideRectangle } from './terrain-geometry.js';
 import { WHEEL, COASTER_SEGMENTS, coasterTrack, wheelAngle } from './attractions.js';
 import { WRECK_PARTS } from './crash-effects.js';
-import { TUNNELS, TUNNEL_SEGMENTS, TUNNEL_SIDES } from './tunnels.js';
+import { TUNNELS, TUNNEL_SIDES } from './tunnels.js';
 import { FLYTHROUGH } from './flythrough.js';
 
 const VERTEX = `
@@ -185,8 +185,8 @@ function makeAttractions(){
 }
 function makeTunnels(){
   const g=new Geometry();
-  for(const tunnel of TUNNELS)for(let i=0;i<TUNNEL_SEGMENTS;i++)for(let j=0;j<TUNNEL_SIDES;j++){
-    const next=(j+1)%TUNNEL_SIDES,edge=i===0||i===TUNNEL_SEGMENTS-1,lightBand=i%4===0;
+  for(const tunnel of TUNNELS)for(let i=0;i<tunnel.segments.length;i++)for(let j=0;j<TUNNEL_SIDES;j++){
+    const next=(j+1)%TUNNEL_SIDES,edge=i===0||i===tunnel.segments.length-1,lightBand=i%4===0;
     const factor=edge?(j%2?1.18:1.42):lightBand?(j%2?1.10:1.25):(j%3===0?.72:.88);
     const color=tunnel.color.map(n=>clamp(n*factor,0,1));
     g.quad(tunnel.rings[i][j],tunnel.rings[i][next],tunnel.rings[i+1][next],tunnel.rings[i+1][j],color);
