@@ -5,7 +5,7 @@ import {impactResponse,applyImpact} from '../src/impact.js';
 import {attractionHit,WHEEL} from '../src/attractions.js';
 import {createCrashEffect,updateCrashEffect} from '../src/crash-effects.js';
 import {createEffects,registerImpact,updateEffects} from '../src/effects.js';
-import {markCrashDamage} from '../src/damage.js';
+import {damageColor,markCrashDamage} from '../src/damage.js';
 
 test('ride collision reports a real contact location, normal and affected part',()=>{
   const a={...createFlight(),x:WHEEL.x,y:WHEEL.y+WHEEL.radius+4,z:WHEEL.z+90},b={...a,z:WHEEL.z-90};
@@ -42,6 +42,16 @@ test('damage accumulates on the struck parts without changing earlier flight sna
   assert.notEqual(plane.damageParts,firstParts);assert.equal(beforeSecond.damageParts.right,0);
   assert(Math.abs(plane.damage-first.damageAdded-second.damageAdded)<1e-9);
   assert.deepEqual(createFlight().damageParts,{nose:0,body:0,left:0,right:0,tail:0});
+});
+
+test('the aircraft diagram becomes steadily redder as a part is damaged',()=>{
+  const rgb=value=>damageColor(value).match(/\d+/g).map(Number);
+  const values=[0,.25,.5,.75,1].map(rgb);
+  for(let i=1;i<values.length;i++){
+    assert(values[i][0]>values[i-1][0]);
+    assert(values[i][1]<values[i-1][1]);assert(values[i][2]<values[i-1][2]);
+  }
+  assert.equal(damageColor(-1),damageColor(0));assert.equal(damageColor(2),damageColor(1));
 });
 
 test('a fatal impact retains the struck part and ground crashes mark the body',()=>{

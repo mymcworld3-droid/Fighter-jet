@@ -38,12 +38,23 @@
     <div class="scene-caption"><span class="caption-line"></span><div><strong>SKY COURSE</strong><small id="course-count">穿越飛行環 0 / 4</small></div></div>
     <section class="damage-panel" aria-label="戰機各部位損傷">
       <div class="damage-heading"><strong>機體損傷</strong><span id="damage-total">總損傷 0%</span></div>
-      <div class="damage-list">
-        <div class="damage-item" data-part="nose"><span>機首</span><span class="damage-meter" aria-hidden="true"><i></i></span><strong class="damage-value">0%</strong></div>
-        <div class="damage-item" data-part="body"><span>機身</span><span class="damage-meter" aria-hidden="true"><i></i></span><strong class="damage-value">0%</strong></div>
-        <div class="damage-item" data-part="left"><span>左翼</span><span class="damage-meter" aria-hidden="true"><i></i></span><strong class="damage-value">0%</strong></div>
-        <div class="damage-item" data-part="right"><span>右翼</span><span class="damage-meter" aria-hidden="true"><i></i></span><strong class="damage-value">0%</strong></div>
-        <div class="damage-item" data-part="tail"><span>機尾</span><span class="damage-meter" aria-hidden="true"><i></i></span><strong class="damage-value">0%</strong></div>
+      <div class="damage-content">
+        <svg class="damage-aircraft" viewBox="0 0 120 168" aria-hidden="true">
+          <path class="aircraft-part" data-aircraft-part="left" d="M52 52 44 65 8 100 6 112 48 104 54 94Z"/>
+          <path class="aircraft-part" data-aircraft-part="right" d="M68 52 76 65 112 100 114 112 72 104 66 94Z"/>
+          <path class="aircraft-part" data-aircraft-part="tail" d="M52 112 25 139 24 148 53 139 60 159 67 139 96 148 95 139 68 112Z"/>
+          <path class="aircraft-part" data-aircraft-part="body" d="M49 52 47 96 51 126 54 143 60 153 66 143 69 126 73 96 71 52Z"/>
+          <path class="aircraft-part" data-aircraft-part="nose" d="M60 7 C54 12 50 30 49 50 L49 61 71 61 71 50 C70 30 66 12 60 7Z"/>
+          <path d="M60 27 C56 31 54 39 54 46 L60 52 66 46 C66 39 64 31 60 27Z" fill="#285358" stroke="#17373e" stroke-width="1.5"/>
+          <path d="M55 77 55 112 M65 77 65 112 M60 119 60 139" fill="none" stroke="#285358" stroke-opacity=".55" stroke-width="1.5"/>
+        </svg>
+        <div class="damage-list">
+          <div class="damage-item" data-part="nose"><span>機首</span><span class="damage-meter" aria-hidden="true"><i></i></span><strong class="damage-value">0%</strong></div>
+          <div class="damage-item" data-part="body"><span>機身</span><span class="damage-meter" aria-hidden="true"><i></i></span><strong class="damage-value">0%</strong></div>
+          <div class="damage-item" data-part="left"><span>左翼</span><span class="damage-meter" aria-hidden="true"><i></i></span><strong class="damage-value">0%</strong></div>
+          <div class="damage-item" data-part="right"><span>右翼</span><span class="damage-meter" aria-hidden="true"><i></i></span><strong class="damage-value">0%</strong></div>
+          <div class="damage-item" data-part="tail"><span>機尾</span><span class="damage-meter" aria-hidden="true"><i></i></span><strong class="damage-value">0%</strong></div>
+        </div>
       </div>
     </section>
     <div id="remote-labels" class="remote-labels" aria-hidden="true"></div>

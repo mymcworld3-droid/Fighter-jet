@@ -9,7 +9,7 @@ import { installZoomGuard } from './touch-zoom.js';
 import { attractionHit } from './attractions.js';
 import { createCrashEffect, updateCrashEffect } from './crash-effects.js';
 import { impactResponse, applyImpact } from './impact.js';
-import { DAMAGE_PARTS, markCrashDamage } from './damage.js';
+import { DAMAGE_PARTS, damageColor, markCrashDamage } from './damage.js';
 import { TUNNELS } from './tunnels.js';
 
 const $ = id => document.getElementById(id);
@@ -191,6 +191,7 @@ if(renderer){
   canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();$('error-screen').hidden=false;});
   const keyAxis=(positive,negative)=>(positive.some(k=>keys.has(k))?1:0)-(negative.some(k=>keys.has(k))?1:0);
   const damageItems=[...document.querySelectorAll('.damage-item')];
+  const aircraftParts=[...document.querySelectorAll('[data-aircraft-part]')];
   let damageDisplay='';
   function updateDamageReadout(){
     const total=Math.round(clamp(flight.damage||0,0,1)*100);
@@ -200,6 +201,7 @@ if(renderer){
     damageDisplay=key;
     $('damage-total').textContent=`總損傷 ${total}%`;
     $('end-damage-total').textContent=`總損傷 ${total}%`;
+    for(const part of aircraftParts)part.style.fill=damageColor(values[part.dataset.aircraftPart]/100);
     for(const item of damageItems){
       const value=values[item.dataset.part];
       item.dataset.level=value>=65?'critical':value>=25?'warning':'normal';
