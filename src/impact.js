@@ -1,5 +1,6 @@
 import { aircraftMatrix, cross } from './math.js';
 import { clamp } from './flight.js';
+import { addPartDamage } from './damage.js';
 
 const dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
 const factors={nose:1.15,body:1,left:.85,right:.85,tail:.95};
@@ -27,7 +28,10 @@ export function impactResponse(flight,hit){
 export function applyImpact(flight,hit){
   const response=impactResponse(flight,hit),m=aircraftMatrix(flight),speed=Math.hypot(...response.postVelocity);
   flight.damage=response.damage;
-  if(response.damageAdded>0)flight.damagePart=response.part;
+  if(response.damageAdded>0){
+    flight.damagePart=response.part;
+    flight.damageParts=addPartDamage(flight.damageParts,response.part,response.damageAdded);
+  }
   if(speed>1){
     flight.speed=speed;
     flight.yaw=(Math.atan2(response.postVelocity[0],-response.postVelocity[2])+Math.PI*2)%(Math.PI*2);

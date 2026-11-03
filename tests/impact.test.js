@@ -5,6 +5,7 @@ import {impactResponse,applyImpact} from '../src/impact.js';
 import {attractionHit,WHEEL} from '../src/attractions.js';
 import {createCrashEffect,updateCrashEffect} from '../src/crash-effects.js';
 import {createEffects,registerImpact,updateEffects} from '../src/effects.js';
+import {markCrashDamage} from '../src/damage.js';
 
 test('ride collision reports a real contact location, normal and affected part',()=>{
   const a={...createFlight(),x:WHEEL.x,y:WHEEL.y+WHEEL.radius+4,z:WHEEL.z+90},b={...a,z:WHEEL.z-90};
@@ -26,6 +27,29 @@ test('a glancing impact causes damage and deflection without immediate destructi
   const response=applyImpact(plane,{point:[-14,100,7],normal:[Math.sqrt(.75),0,.5],part:'left'});
   assert(!response.fatal&&!plane.crashed);assert(plane.damage>0&&plane.damage<1);assert.equal(plane.damagePart,'left');
   assert(Math.abs(plane.yaw)>1e-4||Math.abs(plane.impactYawRate)>1e-4);
+});
+
+test('damage accumulates on the struck parts without changing earlier flight snapshots',()=>{
+  const plane={...createFlight(),x:0,y:100,z:0,speed:100};
+  const first=applyImpact(plane,{point:[0,100,-20],normal:[0,0,1],part:'nose'});
+  const beforeSecond={...plane},firstParts=plane.damageParts;
+  plane.speed=60;plane.yaw=0;plane.pitch=0;
+  const second=applyImpact(plane,{point:[15,100,6],normal:[0,0,1],part:'right'});
+  assert(first.damageAdded>0&&second.damageAdded>0&&!second.fatal);
+  assert.equal(plane.damageParts.nose,first.damageAdded);
+  assert.equal(plane.damageParts.right,second.damageAdded);
+  assert.equal(plane.damageParts.left,0);assert.equal(plane.damageParts.tail,0);
+  assert.notEqual(plane.damageParts,firstParts);assert.equal(beforeSecond.damageParts.right,0);
+  assert(Math.abs(plane.damage-first.damageAdded-second.damageAdded)<1e-9);
+  assert.deepEqual(createFlight().damageParts,{nose:0,body:0,left:0,right:0,tail:0});
+});
+
+test('a fatal impact retains the struck part and ground crashes mark the body',()=>{
+  const plane={...createFlight(),x:0,y:100,z:0,speed:200};
+  const response=applyImpact(plane,{point:[0,100,-20],normal:[0,0,1],part:'nose'});
+  assert(response.fatal);assert.equal(plane.damageParts.nose,1);assert.equal(plane.damageParts.body,0);
+  const landed=createFlight();landed.damageParts.left=.3;markCrashDamage(landed,'body');
+  assert.equal(landed.damage,1);assert.equal(landed.damageParts.body,1);assert.equal(landed.damageParts.left,.3);
 });
 
 test('wreckage retains impact velocity, depends on hit position, and explodes later',()=>{

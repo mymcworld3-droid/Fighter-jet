@@ -9,6 +9,7 @@ import { installZoomGuard } from './touch-zoom.js';
 import { attractionHit } from './attractions.js';
 import { createCrashEffect, updateCrashEffect } from './crash-effects.js';
 import { impactResponse, applyImpact } from './impact.js';
+import { DAMAGE_PARTS, markCrashDamage } from './damage.js';
 import { TUNNELS } from './tunnels.js';
 
 const $ = id => document.getElementById(id);
@@ -98,7 +99,7 @@ if(renderer){
     if(status.kind==='expired'){$('room-message').textContent='房間已失效，請重新建立或加入。';message('房間已失效，請重新建立或加入');}
   };
   const multiplayer=new MultiplayerClient({
-    getState:()=>({x:flight.x,y:flight.y,z:flight.z,yaw:flight.yaw,pitch:flight.pitch,roll:flight.roll,speed:flight.speed,throttle:flight.throttle,gearDown:flight.gearDown,onGround:flight.onGround,damage:flight.damage,damagePart:flight.damagePart,crashImpact:flight.crashed?flight.crashImpact:null,firing:fireControl.active()||keys.has(' '),shotsFired:effects.shotsFired,crashed:flight.crashed}),
+    getState:()=>({x:flight.x,y:flight.y,z:flight.z,yaw:flight.yaw,pitch:flight.pitch,roll:flight.roll,speed:flight.speed,throttle:flight.throttle,gearDown:flight.gearDown,onGround:flight.onGround,damage:flight.damage,damagePart:flight.damagePart,damageParts:flight.damageParts,crashImpact:flight.crashed?flight.crashImpact:null,firing:fireControl.active()||keys.has(' '),shotsFired:effects.shotsFired,crashed:flight.crashed}),
     onStatus:roomStatus,onSpawn:spawnNear
   });
   const errorMessages={invalid_room:'請輸入正確的 6 位房間代碼。',room_not_found:'找不到房間，請確認代碼或請房主重新建立。',room_full:'房間已滿，目前最多 8 人。',room_exists:'房間代碼已使用，請再試一次。',invalid_session:'連線已失效，請重新加入房間。',server_unavailable:'無法連接多人伺服器，請稍後再試。'};
@@ -189,6 +190,23 @@ if(renderer){
   window.addEventListener('resize',drawStick);
   canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();$('error-screen').hidden=false;});
   const keyAxis=(positive,negative)=>(positive.some(k=>keys.has(k))?1:0)-(negative.some(k=>keys.has(k))?1:0);
+  const damageItems=[...document.querySelectorAll('.damage-item')];
+  let damageDisplay='';
+  function updateDamageReadout(){
+    const total=Math.round(clamp(flight.damage||0,0,1)*100);
+    const values=Object.fromEntries(DAMAGE_PARTS.map(part=>[part,Math.round(clamp(flight.damageParts?.[part]||0,0,1)*100)]));
+    const key=[total,...DAMAGE_PARTS.map(part=>values[part])].join(',');
+    if(key===damageDisplay)return;
+    damageDisplay=key;
+    $('damage-total').textContent=`總損傷 ${total}%`;
+    $('end-damage-total').textContent=`總損傷 ${total}%`;
+    for(const item of damageItems){
+      const value=values[item.dataset.part];
+      item.dataset.level=value>=65?'critical':value>=25?'warning':'normal';
+      item.style.setProperty('--part-damage',`${value}%`);
+      item.querySelector('.damage-value').textContent=`${value}%`;
+    }
+  }
   function updateReadouts(){
     const speed=Math.round(flight.speed*3.6),altitude=Math.max(0,Math.round(flight.y));
     const heading=(Math.round(flight.yaw*180/Math.PI)+360)%360;
@@ -197,7 +215,7 @@ if(renderer){
     $('shots-fired').textContent=effects.shotsFired;
     updateGearButton();
     $('course-count').textContent=`穿越飛行環 ${passedGates.size} / ${FLIGHT_GATES.length}`;
-    $('damage-count').hidden=flight.damage<=0;$('damage-count').textContent=`機體損傷 ${Math.round(flight.damage*100)}%`;
+    updateDamageReadout();
     if(!mapModal.hidden)updateMap();
     $('speed-meter').style.width=`${clamp(speed/(MAX_FLIGHT_SPEED*3.6)*100,0,100)}%`;$('altitude-meter').style.width=`${clamp(altitude/2500*100,0,100)}%`;
   }
@@ -218,19 +236,19 @@ if(renderer){
           if(response.normalSpeed>1){
             registerImpact(effects,hit);
             if(response.fatal){
-              Object.assign(flight,incoming,{damage:response.damage,damagePart:response.part,crashed:true,onGround:false,crashReason:'attraction',hitAttraction:hit.kind,crashImpact:response});
+              Object.assign(flight,incoming,{damage:response.damage,damagePart:response.part,damageParts:contact.damageParts,crashed:true,onGround:false,crashReason:'attraction',hitAttraction:hit.kind,crashImpact:response});
               crash=createCrashEffect(incoming,response);
             }else{
               Object.assign(flight,contact);
               const part={nose:'機首',body:'機身',left:'左翼',right:'右翼',tail:'機尾'}[response.part]||'機身';
-              message(`${part}受撞擊・損傷 ${Math.round(flight.damage*100)}%`,3500);
+              message(`${part}受撞擊・損傷 ${Math.round((flight.damageParts[response.part]||0)*100)}%`,3500);
             }
           }
         }
         if(flight.crashed&&!crash){
           const incoming={...previous,x:flight.x,y:flight.y,z:flight.z},ground=groundHeight(flight.x,flight.z),normal=ground>.25?groundNormal(flight.x,flight.z):[0,1,0];
           const response=impactResponse(incoming,{point:[flight.x,Math.max(0,ground),flight.z],normal,part:'body'});
-          flight.crashImpact=response;crash=createCrashEffect(incoming,response);
+          markCrashDamage(flight,'body');flight.crashImpact=response;crash=createCrashEffect(incoming,response);
         }
         if(flight.crashed){renderer.cameraMode='chase';renderer.camera=null;}
       }else if(crash)updateCrashEffect(crash,step,groundHeight);

@@ -35,7 +35,17 @@
 
     <div class="reticle" aria-hidden="true"><span class="reticle-wing left"></span><span class="reticle-circle"></span><span class="reticle-wing right"></span><span class="reticle-stem"></span></div>
 
-    <div class="scene-caption"><span class="caption-line"></span><div><strong>SKY COURSE</strong><small id="course-count">穿越飛行環 0 / 4</small><small id="damage-count" hidden></small></div></div>
+    <div class="scene-caption"><span class="caption-line"></span><div><strong>SKY COURSE</strong><small id="course-count">穿越飛行環 0 / 4</small></div></div>
+    <section class="damage-panel" aria-label="戰機各部位損傷">
+      <div class="damage-heading"><strong>機體損傷</strong><span id="damage-total">總損傷 0%</span></div>
+      <div class="damage-list">
+        <div class="damage-item" data-part="nose"><span>機首</span><span class="damage-meter" aria-hidden="true"><i></i></span><strong class="damage-value">0%</strong></div>
+        <div class="damage-item" data-part="body"><span>機身</span><span class="damage-meter" aria-hidden="true"><i></i></span><strong class="damage-value">0%</strong></div>
+        <div class="damage-item" data-part="left"><span>左翼</span><span class="damage-meter" aria-hidden="true"><i></i></span><strong class="damage-value">0%</strong></div>
+        <div class="damage-item" data-part="right"><span>右翼</span><span class="damage-meter" aria-hidden="true"><i></i></span><strong class="damage-value">0%</strong></div>
+        <div class="damage-item" data-part="tail"><span>機尾</span><span class="damage-meter" aria-hidden="true"><i></i></span><strong class="damage-value">0%</strong></div>
+      </div>
+    </section>
     <div id="remote-labels" class="remote-labels" aria-hidden="true"></div>
     <div id="wingman-radar" class="wingman-radar" hidden aria-label="友機雷達"><span>友機雷達</span><div class="radar-face"><i class="radar-center"></i><div id="radar-dots"></div></div></div>
 
@@ -72,7 +82,19 @@
     <div id="message" class="message" role="status" aria-live="polite">左手駕駛，右手調整推力或按住射擊</div>
 
     <div id="end-screen" class="end-screen" hidden>
-      <div class="end-card"><span class="eyebrow">FLIGHT ENDED</span><h1>飛行結束</h1><p id="crash-detail">戰機碰到地面或海面了。調整機頭，再試一次！</p><button id="restart-button" type="button">重新起飛 <span>↗</span></button></div>
+      <div class="end-card"><span class="eyebrow">FLIGHT ENDED</span><h1>飛行結束</h1><p id="crash-detail">戰機碰到地面或海面了。調整機頭，再試一次！</p>
+        <div class="end-damage" aria-label="墜毀時各部位損傷">
+          <div class="damage-heading"><strong>各部位損傷</strong><span id="end-damage-total">總損傷 0%</span></div>
+          <div class="damage-list end-damage-list">
+            <div class="damage-item" data-part="nose"><span>機首</span><span class="damage-meter" aria-hidden="true"><i></i></span><strong class="damage-value">0%</strong></div>
+            <div class="damage-item" data-part="body"><span>機身</span><span class="damage-meter" aria-hidden="true"><i></i></span><strong class="damage-value">0%</strong></div>
+            <div class="damage-item" data-part="left"><span>左翼</span><span class="damage-meter" aria-hidden="true"><i></i></span><strong class="damage-value">0%</strong></div>
+            <div class="damage-item" data-part="right"><span>右翼</span><span class="damage-meter" aria-hidden="true"><i></i></span><strong class="damage-value">0%</strong></div>
+            <div class="damage-item" data-part="tail"><span>機尾</span><span class="damage-meter" aria-hidden="true"><i></i></span><strong class="damage-value">0%</strong></div>
+          </div>
+        </div>
+        <button id="restart-button" type="button">重新起飛 <span>↗</span></button>
+      </div>
     </div>
     <div id="map-modal" class="room-modal map-modal" hidden>
       <section class="room-dialog map-dialog" role="dialog" aria-modal="true" aria-labelledby="map-title">

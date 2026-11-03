@@ -52,4 +52,24 @@ html,body{overscroll-behavior:none}
 @media(max-height:500px) and (orientation:landscape){.gear-button{min-height:30px;margin-top:5px;padding:0 8px}.gear-button strong{font-size:9px}}
 .simulator button,.simulator a,.simulator input,.simulator select,.simulator textarea{touch-action:manipulation}
 .simulator .fire-button{touch-action:none}
-.scene-caption small[hidden]{display:none}.scene-caption #damage-count{color:#ffcf9a}
+.scene-caption small[hidden]{display:none}
+
+/* Compact damage readout stays visible in single- and multiplayer flights. */
+.damage-panel{position:absolute;left:max(39px,env(safe-area-inset-left));top:calc(25% + 175px);width:176px;padding:11px 12px 10px;border:1px solid #c9f6e93d;border-radius:7px;background:#102e37b8;backdrop-filter:blur(7px);pointer-events:none;box-shadow:0 7px 22px #041a1b26}
+.damage-heading{display:flex;justify-content:space-between;align-items:baseline;gap:6px;margin-bottom:8px;white-space:nowrap}
+.damage-heading strong{font-size:11px;letter-spacing:.04em;color:#eafff8}.damage-heading>span{font-size:10px;color:#cbe3dd}
+.damage-list{display:grid;gap:5px}
+.damage-item{--damage-color:#9de7c8;display:grid;grid-template-columns:26px minmax(0,1fr) 31px;align-items:center;gap:6px;color:#e4f4f0;font-size:10px;line-height:1.25}
+.damage-item[data-level="warning"]{--damage-color:#ffc17b}.damage-item[data-level="critical"]{--damage-color:#ff8277}
+.damage-value{color:var(--damage-color);font:600 11px 'Barlow Condensed',system-ui,sans-serif;text-align:right;font-variant-numeric:tabular-nums}
+.damage-meter{height:4px;overflow:hidden;border-radius:3px;background:#d3f2e22e}.damage-meter i{display:block;height:100%;width:var(--part-damage,0%);border-radius:inherit;background:var(--damage-color);transition:width .2s}
+.end-damage{margin-top:14px;padding:12px;border:1px solid #bce7dc3d;border-radius:7px;background:#09242b99}
+.end-damage-list{grid-template-columns:repeat(5,minmax(0,1fr));gap:7px}.end-damage-list .damage-item{grid-template-columns:1fr;gap:4px;text-align:center}.end-damage-list .damage-value{text-align:center}.end-damage-list .damage-meter{grid-row:3}
+@media(max-width:700px){.damage-panel{left:max(18px,env(safe-area-inset-left));top:calc(23% + 135px);width:148px;padding:8px 9px}.damage-list{gap:4px}.damage-item{gap:4px}.damage-heading{margin-bottom:6px}.damage-heading strong,.damage-heading>span{font-size:9px}}
+@media(max-height:500px) and (orientation:landscape){
+  .damage-panel{left:max(140px,env(safe-area-inset-left));right:max(190px,env(safe-area-inset-right));top:auto;bottom:max(10px,env(safe-area-inset-bottom));width:auto;max-width:310px;margin:auto;padding:5px 7px}
+  .stick-instructions{display:none}
+  .damage-panel .damage-heading{margin-bottom:3px}.damage-panel .damage-heading strong,.damage-panel .damage-heading span{font-size:8px}
+  .damage-panel .damage-list{grid-template-columns:repeat(5,minmax(0,1fr));gap:3px}.damage-panel .damage-item{grid-template-columns:1fr;gap:1px;text-align:center;font-size:8px}.damage-panel .damage-value{text-align:center;font-size:9px}.damage-panel .damage-meter{display:none}
+  .end-card{padding:16px 20px;max-height:calc(100dvh - 24px);overflow:auto;touch-action:pan-y}.end-card h1{font-size:22px;margin:4px 0}.end-card p{font-size:12px;line-height:1.4;margin:5px 0}.end-card button{margin-top:8px;padding:9px 12px}.end-damage{margin-top:8px;padding:8px}.end-damage .damage-heading{margin-bottom:5px}
+}

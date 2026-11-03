@@ -83,7 +83,7 @@ export class MultiplayerClient {
       const k=1-Math.exp(-7*stepTime);
       for(const key of ['x','y','z'])s[key]+=(target[key]-s[key])*k;
       s.yaw=turn(s.yaw,t.yaw,k);s.pitch+=(t.pitch-s.pitch)*k;s.roll+=(t.roll-s.roll)*k;
-      s.speed=t.speed;s.throttle=t.throttle;s.crashed=t.crashed;s.gearDown=!!t.gearDown;s.onGround=!!t.onGround;s.damage=t.damage||0;s.damagePart=t.damagePart||null;
+      s.speed=t.speed;s.throttle=t.throttle;s.crashed=t.crashed;s.gearDown=!!t.gearDown;s.onGround=!!t.onGround;s.damage=t.damage||0;s.damagePart=t.damagePart||null;s.damageParts=t.damageParts||null;
       s.gearPosition=clamp((s.gearPosition||0)+clamp((s.gearDown?1:0)-(s.gearPosition||0),-stepTime,stepTime),0,1);
       const firing=(age<1.5&&t.firing)||p.queuedShot;
       for(let left=stepTime;left>0;){const d=Math.min(left,.025);updateEffects(p.effects,s,firing,d);if(p.crash)updateCrashEffect(p.crash,d,groundHeight);left-=d;}

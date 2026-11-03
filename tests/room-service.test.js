@@ -86,10 +86,16 @@ test('peer landing gear and ground state animate from synchronized updates',()=>
 test('multiplayer preserves damage and impact motion for remote wreckage',async()=>{
   const store=new MemoryRoomStore(),a=payload(21),b=payload(22);
   const response=impactResponse(a.state,{point:[a.state.x-15,a.state.y,a.state.z+6],normal:[0,0,1],part:'left'});
-  a.state.crashed=true;a.state.damage=.8;a.state.damagePart='left';a.state.crashImpact=response;
+  a.state.crashed=true;a.state.damage=.8;a.state.damagePart='left';a.state.damageParts={nose:.2,body:0,left:.6,right:0,tail:0};a.state.crashImpact=response;
   assert.equal((await call(store,{...a,action:'create'})).status,200);
   const joined=await call(store,{...b,action:'join'}),received=joined.body.peers[0].state;
-  assert.equal(received.damage,.8);assert.equal(received.damagePart,'left');assert.deepEqual(received.crashImpact.postVelocity,response.postVelocity);
+  assert.equal(received.damage,.8);assert.equal(received.damagePart,'left');assert.deepEqual(received.damageParts,a.state.damageParts);assert.deepEqual(received.crashImpact.postVelocity,response.postVelocity);
   const invalid=payload(23,'DEF234');invalid.state.damage=2;
   assert.equal((await call(store,{...invalid,action:'create'})).status,400);
+  const invalidPart=payload(24,'DEF234');invalidPart.state.damageParts.left=1.1;
+  assert.equal((await call(store,{...invalidPart,action:'create'})).status,400);
+  const oldClient=payload(25,'DEF234');delete oldClient.state.damageParts;
+  assert.equal((await call(store,{...oldClient,action:'create'})).status,200);
+  const oldPeer=await call(store,{...payload(26,'DEF234'),action:'join'});
+  assert.equal(oldPeer.status,200);assert.equal(oldPeer.body.peers[0].state.damageParts,null);
 });

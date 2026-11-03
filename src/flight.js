@@ -1,5 +1,6 @@
 // Small, deterministic flight model shared by the renderer and the tests.
 import { aircraftMatrix } from './math.js';
+import { createDamageParts } from './damage.js';
 export const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 export const ISLANDS = [
@@ -82,7 +83,7 @@ export function relativeGroundAngles(state,normal){
 export function groundClearance(normal){return LANDING_GEAR_CLEARANCE/clamp(normal[1],.45,1);}
 
 export function createFlight() {
-  return { x: 0, y: 340, z: 1050, yaw: 0, pitch: 0, roll: 0, pitchRate: 0, impactRollRate:0, impactYawRate:0, damage:0, damagePart:null, speed: 200, throttle: 0.65, gearDown:false, gearPosition:0, onGround:false, groundTime:0, groundClearance:LANDING_GEAR_CLEARANCE, crashed:false, crashReason:null };
+  return { x: 0, y: 340, z: 1050, yaw: 0, pitch: 0, roll: 0, pitchRate: 0, impactRollRate:0, impactYawRate:0, damage:0, damagePart:null, damageParts:createDamageParts(), speed: 200, throttle: 0.65, gearDown:false, gearPosition:0, onGround:false, groundTime:0, groundClearance:LANDING_GEAR_CLEARANCE, crashed:false, crashReason:null };
 }
 
 export function setLandingGear(state,down){
