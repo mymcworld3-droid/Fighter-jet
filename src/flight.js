@@ -1,7 +1,10 @@
 // Small, deterministic flight model shared by the renderer and the tests.
-import { aircraftMatrix } from './math.js';
+import { aircraftMatrix, wrapAngle } from './math.js';
 import { createDamageParts } from './damage.js';
 export const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+// Beyond vertical, the aircraft's horizontal direction reverses even though
+// its yaw coordinate stays continuous.
+export const flightHeading = state => (state.yaw+(Math.cos(state.pitch)<0?Math.PI:0)+Math.PI*2)%(Math.PI*2);
 const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 export const ISLANDS = [
   [0, -500, 2500, 2600, 360],
@@ -127,7 +130,7 @@ export function updateFlight(state, input, elapsed, groundHeight=terrainHeight,g
   }
 
   state.pitchRate += (y * 0.45 - state.pitchRate) * (1 - Math.exp(-4.5 * dt));
-  state.pitch = clamp(state.pitch + state.pitchRate * dt, -0.68, 0.68);
+  state.pitch = wrapAngle(state.pitch + state.pitchRate * dt);
   // Full stick permits an approximately 85° bank while keeping pitch and yaw controllable.
   state.roll += (state.impactRollRate||0)*dt;
   state.roll += (-x * 1.48 - state.roll) * (1 - Math.exp(-3.5 * dt));

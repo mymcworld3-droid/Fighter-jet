@@ -18,7 +18,7 @@ function validate(payload) {
   const s=payload.state;
   if(!name||!s||typeof s!=='object')return null;
   if(!numberIn(s.x,-10000000,10000000)||!numberIn(s.y,0,8100)||!numberIn(s.z,-10000000,10000000)||
-     !numberIn(s.yaw,-7,7)||!numberIn(s.pitch,-1,1)||!numberIn(s.roll,-2,2)||
+     !numberIn(s.yaw,-7,7)||!numberIn(s.pitch,-Math.PI,Math.PI)||!numberIn(s.roll,-2,2)||
      !numberIn(s.speed,0,500)||!numberIn(s.throttle,0,1)||!Number.isSafeInteger(s.shotsFired)||s.shotsFired<0||s.shotsFired>10000000||
      typeof s.firing!=='boolean'||typeof s.crashed!=='boolean'||(s.gearDown!==undefined&&typeof s.gearDown!=='boolean')||(s.onGround!==undefined&&typeof s.onGround!=='boolean'))return null;
   if((s.damage!==undefined&&!numberIn(s.damage,0,1))||(s.damagePart!=null&&!parts.has(s.damagePart)))return null;

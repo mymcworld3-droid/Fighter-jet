@@ -1,6 +1,7 @@
 import { clamp } from './flight.js';
 import { createEffects, updateEffects } from './effects.js';
 import { createCrashEffect, updateCrashEffect } from './crash-effects.js';
+import { wrapAngle } from './math.js';
 
 const LETTERS='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const randomHex=bytes=>{const a=new Uint8Array(bytes);crypto.getRandomValues(a);return Array.from(a,x=>x.toString(16).padStart(2,'0')).join('');};
@@ -82,7 +83,7 @@ export class MultiplayerClient {
       const target={x:t.x+Math.sin(t.yaw)*horizontal,y:t.onGround?t.y:t.y+Math.sin(t.pitch)*t.speed*prediction,z:t.z-Math.cos(t.yaw)*horizontal};
       const k=1-Math.exp(-7*stepTime);
       for(const key of ['x','y','z'])s[key]+=(target[key]-s[key])*k;
-      s.yaw=turn(s.yaw,t.yaw,k);s.pitch+=(t.pitch-s.pitch)*k;s.roll+=(t.roll-s.roll)*k;
+      s.yaw=turn(s.yaw,t.yaw,k);s.pitch=wrapAngle(s.pitch+wrapAngle(t.pitch-s.pitch)*k);s.roll+=(t.roll-s.roll)*k;
       s.speed=t.speed;s.throttle=t.throttle;s.crashed=t.crashed;s.gearDown=!!t.gearDown;s.onGround=!!t.onGround;s.damage=t.damage||0;s.damagePart=t.damagePart||null;s.damageParts=t.damageParts||null;
       s.gearPosition=clamp((s.gearPosition||0)+clamp((s.gearDown?1:0)-(s.gearPosition||0),-stepTime,stepTime),0,1);
       const firing=(age<1.5&&t.firing)||p.queuedShot;

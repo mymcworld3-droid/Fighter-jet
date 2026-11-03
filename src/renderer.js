@@ -1,5 +1,5 @@
 import { terrainHeight, terrainMeshHeight, terrainMeshNormal, clamp, PARK, TERRAIN_SIZE, WEBGL_TERRAIN_STEPS, CANVAS_TERRAIN_STEPS } from './flight.js';
-import { identity, perspective, lookAt, multiply, aircraftMatrix, transformPoint, normalize, cross, sub } from './math.js';
+import { identity, perspective, lookAt, multiply, aircraftMatrix, flightCameraBasis, transformPoint, normalize, cross, sub } from './math.js';
 import { cameraFov, chaseCameraOffset, cameraDamping } from './speed-effects.js';
 import { SEA_LEVEL, keepCameraAboveSea, clipTerrainAboveSea, horizonLine, oceanScreenGeometry } from './ocean.js';
 import { FLIGHT_GATES } from './course.js';
@@ -414,16 +414,15 @@ export class FlightRenderer {
     this.resize();const gl=this.gl;gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
     const model=aircraftMatrix(s),body=crash?.pieces[1],cameraFlight=body?{...s,...crash.view,x:body.x,y:body.y,z:body.z}:s,cameraModel=body?aircraftMatrix(cameraFlight):model;
     const desired=keepCameraAboveSea(this.cameraMode==='chase'?transformPoint(cameraModel,chaseCameraOffset(s.speed)):transformPoint(cameraModel,[0,3,-11]));
-    // The chase camera rolls gently with the aircraft while preserving the horizon.
+    // Follow the aircraft through a loop without losing a stable camera basis.
     const look=this.cameraMode==='chase'?transformPoint(cameraModel,[0,2,-28]):transformPoint(cameraModel,[0,2,-150]);
     if(!this.camera)this.camera=desired.slice();
     const k=cameraDamping(dt,s.speed,this.cameraMode==='chase');for(let i=0;i<3;i++)this.camera[i]+=(desired[i]-this.camera[i])*k;
     keepCameraAboveSea(this.camera);
-    const up=this.cameraMode==='chase'?[Math.sin(-cameraFlight.roll)*.25,1,0]:[cameraModel[4],cameraModel[5],cameraModel[6]];
+    const {backwards,right,up}=flightCameraBasis(this.camera,look,cameraFlight,this.cameraMode==='chase');
     const fov=cameraFov(s.speed,this.canvas.clientWidth<this.canvas.clientHeight)*Math.PI/180;
     const projection=perspective(fov,this.canvas.width/this.canvas.height,.5,150000);
-    const backwards=normalize(sub(this.camera,look)),right=normalize(cross(up,backwards)),cameraUp=cross(backwards,right);
-    this.oceanHorizon=horizonLine(right,cameraUp,backwards,this.canvas.width,this.canvas.height,this.canvas.height/(2*Math.tan(fov/2)));
+    this.oceanHorizon=horizonLine(right,up,backwards,this.canvas.width,this.canvas.height,this.canvas.height/(2*Math.tan(fov/2)));
     this.viewProjection=multiply(projection,lookAt(this.camera,look,up));
     gl.uniformMatrix4fv(this.uniforms.uViewProjection,false,this.viewProjection);
     gl.uniform3fv(this.uniforms.uCamera,this.camera);
@@ -479,8 +478,7 @@ export class SoftwareFlightRenderer {
     if(!this.camera)this.camera=desired.slice();
     const smoothing=cameraDamping(renderDt,s.speed,this.cameraMode==='chase');for(let i=0;i<3;i++)this.camera[i]+=(desired[i]-this.camera[i])*smoothing;
     keepCameraAboveSea(this.camera);
-    const up=this.cameraMode==='chase'?[Math.sin(-cameraFlight.roll)*.25,1,0]:[cameraModel[4],cameraModel[5],cameraModel[6]];
-    const backwards=normalize(sub(this.camera,look)),right=normalize(cross(up,backwards)),cameraUp=cross(backwards,right),eye=this.camera;
+    const eye=this.camera,{backwards,right,up}=flightCameraBasis(eye,look,cameraFlight,this.cameraMode==='chase'),cameraUp=up;
     const focal=h/(2*Math.tan(cameraFov(s.speed,canvas.clientWidth<canvas.clientHeight)*Math.PI/360));
     const ocean=oceanScreenGeometry({width:w,height:h,right,up:cameraUp,backwards,focal,eyeY:eye[1]});this.oceanHorizon=ocean.horizon;
     if(ocean.points.length>=3){

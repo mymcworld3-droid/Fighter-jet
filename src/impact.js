@@ -1,4 +1,4 @@
-import { aircraftMatrix, cross } from './math.js';
+import { aircraftMatrix, cross, wrapAngle } from './math.js';
 import { clamp } from './flight.js';
 import { addPartDamage } from './damage.js';
 
@@ -34,8 +34,11 @@ export function applyImpact(flight,hit){
   }
   if(speed>1){
     flight.speed=speed;
-    flight.yaw=(Math.atan2(response.postVelocity[0],-response.postVelocity[2])+Math.PI*2)%(Math.PI*2);
-    flight.pitch=clamp(Math.asin(clamp(response.postVelocity[1]/speed,-1,1)),-.68,.68);
+    const inverted=Math.cos(flight.pitch)<0;
+    const pitch=Math.asin(clamp(response.postVelocity[1]/speed,-1,1));
+    const heading=Math.atan2(response.postVelocity[0],-response.postVelocity[2]);
+    flight.yaw=(heading+(inverted?Math.PI:0)+Math.PI*2)%(Math.PI*2);
+    flight.pitch=wrapAngle(inverted?(pitch>=0?Math.PI-pitch:-Math.PI-pitch):pitch);
   }else flight.speed=0;
   const right=[m[0],m[1],m[2]],up=[m[4],m[5],m[6]],back=[m[8],m[9],m[10]];
   flight.pitchRate=clamp((flight.pitchRate||0)+dot(response.angularVelocity,right),-2,2);

@@ -17,6 +17,17 @@ function sqliteStore(){
   return new D1RoomStore({prepare(sql){return{bind(...params){const stmt=db.prepare(sql);return{async run(){return{meta:{changes:Number(stmt.run(...params).changes)}}},async all(){return{results:stmt.all(...params)}},async first(){return stmt.get(...params)}};}};}});
 }
 for(const [name,make] of [['memory',()=>new MemoryRoomStore()],['D1 SQL',sqliteStore]]){
+  test(`${name}: looping aircraft remain synchronized across inverted angles`,async()=>{
+    const store=make(),a=payload(28),b=payload(29);
+    a.state.pitch=Math.PI-.01;
+    assert.equal((await call(store,{...a,action:'create'})).status,200);
+    assert.equal((await call(store,{...b,action:'join'})).body.peers[0].state.pitch,a.state.pitch);
+    a.state.pitch=-Math.PI+.01;
+    assert.equal((await call(store,a)).status,200);
+    assert.equal((await call(store,b)).body.peers[0].state.pitch,a.state.pitch);
+    a.state.pitch=Math.PI+.01;
+    assert.equal((await call(store,a)).status,400);
+  });
   test(`${name}: high-speed aircraft remain visible to other players`,async()=>{
     const store=make(),a=payload(30),b=payload(31);
     a.state.speed=MAX_FLIGHT_SPEED;

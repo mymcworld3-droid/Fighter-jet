@@ -1,4 +1,4 @@
-import { clamp, createFlight, updateFlight, setLandingGear, MAX_FLIGHT_SPEED } from './flight.js';
+import { clamp, createFlight, updateFlight, setLandingGear, flightHeading, MAX_FLIGHT_SPEED } from './flight.js';
 import { bindPointerControl, leverValue } from './controls.js';
 import { createEffects, updateEffects, registerImpact } from './effects.js';
 import { FlightRenderer, SoftwareFlightRenderer } from './renderer.js';
@@ -80,9 +80,9 @@ if(renderer){
   setThrottle(65);
   const labels=new Map(),dots=new Map(),roomModal=$('multiplayer-modal'),mapModal=$('map-modal');
   function spawnNear(other){
-    const yaw=other.yaw;
-    flight.x=clamp(other.x-Math.sin(yaw)*180+Math.cos(yaw)*70,-9999900,9999900);
-    flight.z=clamp(other.z+Math.cos(yaw)*180+Math.sin(yaw)*70,-9999900,9999900);
+    const yaw=other.yaw,heading=flightHeading(other);
+    flight.x=clamp(other.x-Math.sin(heading)*180+Math.cos(heading)*70,-9999900,9999900);
+    flight.z=clamp(other.z+Math.cos(heading)*180+Math.sin(heading)*70,-9999900,9999900);
     flight.y=Math.min(8000,Math.max(other.y+20,groundHeight(flight.x,flight.z)+60));
     flight.yaw=yaw;flight.pitch=other.pitch;flight.roll=0;flight.speed=other.speed;flight.onGround=false;flight.crashed=false;flight.crashReason=null;flight.crashImpact=null;crash=null;impactCooldown=0;renderer.camera=null;
     $('end-screen').hidden=true;$('flight-status').textContent='飛行中';
@@ -140,7 +140,7 @@ if(renderer){
       const other=peer.flight,dx=other.x-flight.x,dz=other.z-flight.z,distance=Math.hypot(dx,other.y-flight.y,dz);
       const point=renderer.projectPoint([other.x,other.y+10,other.z]);
       label.hidden=!point;if(point){label.style.left=`${point.x}px`;label.style.top=`${point.y}px`;label.textContent=`${peer.name} · ${Math.round(distance)} m`;}
-      const right=dx*Math.cos(flight.yaw)+dz*Math.sin(flight.yaw),forward=dx*Math.sin(flight.yaw)-dz*Math.cos(flight.yaw),scale=Math.max(2000,Math.hypot(right,forward));
+      const heading=flightHeading(flight),right=dx*Math.cos(heading)+dz*Math.sin(heading),forward=dx*Math.sin(heading)-dz*Math.cos(heading),scale=Math.max(2000,Math.hypot(right,forward));
       dot.style.left=`${50+right/scale*42}%`;dot.style.top=`${50-forward/scale*42}%`;
     }
     for(const [id,el] of labels)if(!ids.has(id)){el.remove();labels.delete(id);}
@@ -193,7 +193,7 @@ if(renderer){
   }
   function updateMap(){
     const x=(flight.x+9000)/18000*1000,z=(flight.z+9000)/18000*1000;
-    $('map-plane').setAttribute('transform',`translate(${clamp(x,28,972)} ${clamp(z,28,972)}) rotate(${flight.yaw*180/Math.PI})`);
+    $('map-plane').setAttribute('transform',`translate(${clamp(x,28,972)} ${clamp(z,28,972)}) rotate(${flightHeading(flight)*180/Math.PI})`);
     $('map-status').textContent=(x<0||x>1000||z<0||z>1000)?'目前已飛出地圖範圍，圖示顯示最近的邊界。':'青色圓點是飛行環，金色圓點是遊樂園；彩色曲線是空中隧道，編號菱形是穿梭設施。';
   }
   window.addEventListener('blur',releaseControls);
@@ -222,7 +222,7 @@ if(renderer){
   }
   function updateReadouts(){
     const speed=Math.round(flight.speed*3.6),altitude=Math.max(0,Math.round(flight.y));
-    const heading=(Math.round(flight.yaw*180/Math.PI)+360)%360;
+    const heading=(Math.round(flightHeading(flight)*180/Math.PI)+360)%360;
     $('speed').textContent=speed;$('altitude').textContent=altitude;$('heading').textContent=`${String(heading).padStart(3,'0')}°`;
     $('direction').textContent=['N','NE','E','SE','S','SW','W','NW'][Math.round(heading/45)%8];
     $('shots-fired').textContent=effects.shotsFired;
